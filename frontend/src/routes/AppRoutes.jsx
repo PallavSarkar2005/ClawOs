@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-
+import SkillsPage from "../pages/SkillsPage";
 import LandingPage from "../pages/LandingPage";
 import LoginPage from "../pages/LoginPage";
 import SignupPage from "../pages/SignupPage";
 import DashboardPage from "../pages/DashboardPage";
 import ChatPage from "../pages/ChatPage";
-
+import MemoryPage from "../pages/MemoryPage";
+import WorkflowsPage from "../pages/WorkflowsPage";
+import SettingsPage from "../pages/SettingsPage";
 function AppRoutes() {
   return (
     <BrowserRouter>
@@ -19,6 +21,14 @@ function AppRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
 
         <Route path="/chat" element={<ChatPage />} />
+        
+        <Route path="/skills" element={<SkillsPage />} />
+        
+        <Route path="/memory" element={<MemoryPage />} />
+        
+        <Route path="/workflows" element={<WorkflowsPage />} />
+        
+        <Route path="/settings" element={<SettingsPage />} />
       </Routes>
     </BrowserRouter>
   );
