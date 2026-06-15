@@ -8,6 +8,8 @@ import ChatPage from "../pages/ChatPage";
 import MemoryPage from "../pages/MemoryPage";
 import WorkflowsPage from "../pages/WorkflowsPage";
 import SettingsPage from "../pages/SettingsPage";
+import ProtectedRoute from "./ProtectedRoute";
+
 function AppRoutes() {
   return (
     <BrowserRouter>
@@ -18,16 +20,23 @@ function AppRoutes() {
 
         <Route path="/signup" element={<SignupPage />} />
 
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="/chat" element={<ChatPage />} />
-        
+
         <Route path="/skills" element={<SkillsPage />} />
-        
+
         <Route path="/memory" element={<MemoryPage />} />
-        
+
         <Route path="/workflows" element={<WorkflowsPage />} />
-        
+
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
     </BrowserRouter>

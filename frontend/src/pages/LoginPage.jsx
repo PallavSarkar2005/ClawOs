@@ -1,6 +1,22 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function LoginPage() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+
+    // Temporary login until backend auth is built
+    login({
+      name: "Pallav",
+      email: "test@test.com",
+    });
+
+    navigate("/dashboard");
+  };
+
   return (
     <div className="min-h-screen bg-[#2C3D73] flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl">
@@ -10,7 +26,7 @@ function LoginPage() {
           <p className="text-gray-500 mt-2">Sign in to continue</p>
         </div>
 
-        <form className="space-y-5">
+        <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block mb-2 text-sm font-medium text-gray-700">
               Email
@@ -20,6 +36,7 @@ function LoginPage() {
               type="email"
               placeholder="Enter your email"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-[#7CAADC]"
+              required
             />
           </div>
 
@@ -32,6 +49,7 @@ function LoginPage() {
               type="password"
               placeholder="Enter your password"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-[#7CAADC]"
+              required
             />
           </div>
 
