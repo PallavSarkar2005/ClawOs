@@ -2,13 +2,17 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function ProtectedRoute({ children }) {
-  const { user } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
 
-  if (!user) {
-    return <Navigate to="/login" />;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
   }
 
-  return children;
+  return isAuthenticated ? children : <Navigate to="/login" />;
 }
 
 export default ProtectedRoute;

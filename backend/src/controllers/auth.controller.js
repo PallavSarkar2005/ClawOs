@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const prisma = require("../database/prisma");
-const { generateToken } = require("./jwt.service");
+const { generateToken } = require("../services/jwt.service");
 
 async function register(req, res) {
   try {

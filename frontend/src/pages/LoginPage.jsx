@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -5,16 +6,36 @@ function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const handleLogin = (e) => {
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleLogin = async (e) => {
     e.preventDefault();
 
-    // Temporary login until backend auth is built
-    login({
-      name: "Pallav",
-      email: "test@test.com",
-    });
+    try {
+      setLoading(true);
+      setError("");
 
-    navigate("/dashboard");
+      await login(formData.email, formData.password);
+
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err?.response?.data?.message || "Login failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -26,6 +47,12 @@ function LoginPage() {
           <p className="text-gray-500 mt-2">Sign in to continue</p>
         </div>
 
+        {error && (
+          <div className="mb-4 bg-red-100 text-red-700 p-3 rounded-xl">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block mb-2 text-sm font-medium text-gray-700">
@@ -34,6 +61,9 @@ function LoginPage() {
 
             <input
               type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
               placeholder="Enter your email"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-[#7CAADC]"
               required
@@ -47,6 +77,9 @@ function LoginPage() {
 
             <input
               type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
               placeholder="Enter your password"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-[#7CAADC]"
               required
@@ -55,9 +88,10 @@ function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-[#F15B42] hover:bg-[#e24f37] text-white py-3 rounded-xl font-semibold transition"
+            disabled={loading}
+            className="w-full bg-[#F15B42] hover:bg-[#e24f37] text-white py-3 rounded-xl font-semibold transition disabled:opacity-50"
           >
-            Sign In
+            {loading ? "Signing In..." : "Sign In"}
           </button>
         </form>
 
