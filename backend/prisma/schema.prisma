@@ -14,15 +14,19 @@ model User {
   password      String?
   githubId      String?
   createdAt     DateTime       @default(now())
+
   conversations Conversation[]
+  memories      Memory[]
 }
 
 model Conversation {
   id        String    @id @default(uuid())
   title     String
   createdAt DateTime  @default(now())
+
   userId    String
   user      User      @relation(fields: [userId], references: [id])
+
   messages  Message[]
 }
 
@@ -31,6 +35,17 @@ model Message {
   role           String
   content        String
   createdAt      DateTime     @default(now())
+
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Memory {
+  id        String   @id @default(uuid())
+  content   String
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
 }

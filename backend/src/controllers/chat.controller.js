@@ -1,5 +1,6 @@
 const prisma = require("../database/prisma");
 const coordinatorAgent = require("../agents/coordinator.agent");
+const shouldSaveMemory = require("../agents/memory.agent");
 
 async function createConversation(req, res) {
   try {
@@ -63,6 +64,12 @@ async function sendMessage(req, res) {
       });
     }
 
+    if (conversation.userId !== req.user.id) {
+      return res.status(403).json({
+        message: "Unauthorized",
+      });
+    }
+
     await prisma.message.create({
       data: {
         role: "user",
@@ -82,7 +89,29 @@ async function sendMessage(req, res) {
       });
     }
 
-    const aiReply = await coordinatorAgent(message);
+    try {
+      if (shouldSaveMemory(message)) {
+        await prisma.memory.create({
+          data: {
+            content: message,
+            userId: req.user.id,
+          },
+        });
+      }
+    } catch (memoryError) {
+      console.error("Memory Save Error:", memoryError);
+    }
+
+    let aiReply;
+
+    try {
+      aiReply = await coordinatorAgent(message);
+    } catch (aiError) {
+      console.error("AI Error:", aiError);
+
+      aiReply =
+        "AI service is temporarily unavailable. Please try again later.";
+    }
 
     await prisma.message.create({
       data: {
@@ -109,6 +138,24 @@ async function sendMessage(req, res) {
 
 async function getMessages(req, res) {
   try {
+    const conversation = await prisma.conversation.findUnique({
+      where: {
+        id: req.params.conversationId,
+      },
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: "Conversation not found",
+      });
+    }
+
+    if (conversation.userId !== req.user.id) {
+      return res.status(403).json({
+        message: "Unauthorized",
+      });
+    }
+
     const messages = await prisma.message.findMany({
       where: {
         conversationId: req.params.conversationId,
