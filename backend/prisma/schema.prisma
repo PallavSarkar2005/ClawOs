@@ -14,7 +14,6 @@ model User {
   password      String?
   githubId      String?
   createdAt     DateTime       @default(now())
-
   conversations Conversation[]
 }
 
@@ -22,10 +21,8 @@ model Conversation {
   id        String    @id @default(uuid())
   title     String
   createdAt DateTime  @default(now())
-
   userId    String
   user      User      @relation(fields: [userId], references: [id])
-
   messages  Message[]
 }
 
@@ -34,7 +31,6 @@ model Message {
   role           String
   content        String
   createdAt      DateTime     @default(now())
-
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
