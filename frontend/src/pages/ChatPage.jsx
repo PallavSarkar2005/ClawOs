@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Sidebar from "../components/Sidebar";
 
 import {
@@ -6,6 +6,7 @@ import {
   getConversations,
   getMessages,
   sendMessage,
+  deleteConversation,
 } from "../api/chatApi";
 
 function ChatPage() {
@@ -13,59 +14,132 @@ function ChatPage() {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  };
 
   const loadConversations = async () => {
     try {
-      const res = await getConversations();
+      const data = await getConversations();
 
-      setConversations(res.data);
+      setConversations(data);
 
-      if (res.data.length > 0 && !currentConversation) {
-        setCurrentConversation(res.data[0].id);
+      if (data.length > 0 && !currentConversation) {
+        setCurrentConversation(data[0]);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Load conversations error:", error);
     }
   };
 
   const loadMessages = async (conversationId) => {
     try {
-      const res = await getMessages(conversationId);
+      const data = await getMessages(conversationId);
 
-      setMessages(res.data);
+      setMessages(data);
     } catch (error) {
-      console.error(error);
+      console.error("Load messages error:", error);
     }
   };
 
   const handleNewChat = async () => {
     try {
-      const res = await createConversation();
+      const chat = await createConversation();
 
-      await loadConversations();
+      setConversations((prev) => [chat, ...prev]);
 
-      setCurrentConversation(res.data.id);
+      setCurrentConversation(chat);
 
       setMessages([]);
     } catch (error) {
-      console.error(error);
+      console.error("Create conversation error:", error);
+    }
+  };
+
+  const handleSelectConversation = async (chat) => {
+    setCurrentConversation(chat);
+
+    await loadMessages(chat.id);
+  };
+
+  const handleDeleteConversation = async (id) => {
+    try {
+      await deleteConversation(id);
+
+      const updatedConversations = conversations.filter(
+        (chat) => chat.id !== id,
+      );
+
+      setConversations(updatedConversations);
+
+      if (currentConversation?.id === id) {
+        if (updatedConversations.length > 0) {
+          setCurrentConversation(updatedConversations[0]);
+
+          await loadMessages(updatedConversations[0].id);
+        } else {
+          setCurrentConversation(null);
+          setMessages([]);
+        }
+      }
+    } catch (error) {
+      console.error("Delete conversation error:", error);
     }
   };
 
   const handleSend = async () => {
-    if (!input.trim() || !currentConversation) return;
+    if (!input.trim()) return;
+
+    if (!currentConversation) {
+      await handleNewChat();
+      return;
+    }
+
+    const userMessage = {
+      id: Date.now(),
+      role: "user",
+      content: input,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+
+    const messageText = input;
+
+    setInput("");
+
+    setLoading(true);
 
     try {
-      await sendMessage({
-        conversationId: currentConversation,
-        message: input,
-      });
+      const response = await sendMessage(currentConversation.id, messageText);
 
-      setInput("");
+      const assistantMessage = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content: response.reply,
+      };
 
-      await loadMessages(currentConversation);
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      await loadConversations();
     } catch (error) {
-      console.error(error);
+      console.error("Send message error:", error);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 2,
+          role: "assistant",
+          content: "Something went wrong. Please try again.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -74,79 +148,93 @@ function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (currentConversation) {
-      loadMessages(currentConversation);
+    if (currentConversation?.id) {
+      loadMessages(currentConversation.id);
     }
   }, [currentConversation]);
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading]);
+
   return (
-    <div className="flex min-h-screen bg-[#1B2748]">
-      <Sidebar />
+    <div className="flex h-screen bg-[#1B2748]">
+      <Sidebar
+        conversations={conversations}
+        currentConversation={currentConversation}
+        onSelectConversation={handleSelectConversation}
+        onNewChat={handleNewChat}
+        onDelete={handleDeleteConversation}
+      />
 
-      <div className="flex w-full">
-        {/* Conversations */}
-        <div className="w-72 border-r border-white/10 p-4">
-          <button
-            onClick={handleNewChat}
-            className="w-full bg-[#F15B42] text-white py-3 rounded-xl mb-4"
-          >
-            New Chat
-          </button>
-
-          {conversations.map((conversation) => (
-            <div
-              key={conversation.id}
-              onClick={() => setCurrentConversation(conversation.id)}
-              className={`p-3 rounded-xl mb-2 cursor-pointer text-white ${
-                currentConversation === conversation.id
-                  ? "bg-[#F15B42]"
-                  : "bg-white/10"
-              }`}
-            >
-              {conversation.title}
-            </div>
-          ))}
+      <div className="flex flex-col flex-1">
+        {/* Header */}
+        <div className="border-b border-white/10 p-5">
+          <h1 className="text-white text-2xl font-bold">
+            {currentConversation ? currentConversation.title : "ClawOS Chat"}
+          </h1>
         </div>
 
-        {/* Chat Area */}
-        <div className="flex flex-col flex-1">
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {messages.map((msg) => (
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center text-white/50 mt-20">
+              Start a conversation...
+            </div>
+          )}
+
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${
+                msg.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
               <div
-                key={msg.id}
-                className={`flex ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
+                className={`max-w-2xl px-5 py-3 rounded-2xl break-words ${
+                  msg.role === "user"
+                    ? "bg-[#F15B42] text-white"
+                    : "bg-[#24335f] text-white"
                 }`}
               >
-                <div
-                  className={`max-w-xl px-4 py-3 rounded-2xl ${
-                    msg.role === "user"
-                      ? "bg-[#F15B42] text-white"
-                      : "bg-[#24335f] text-white"
-                  }`}
-                >
-                  {msg.content}
-                </div>
+                {msg.content}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
 
-          <div className="border-t border-white/10 p-4 flex gap-3">
-            <input
-              type="text"
-              placeholder="Type a message..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-xl"
-            />
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-[#24335f] text-white px-5 py-3 rounded-2xl">
+                Thinking...
+              </div>
+            </div>
+          )}
 
-            <button
-              onClick={handleSend}
-              className="bg-[#F15B42] text-white px-6 rounded-xl"
-            >
-              Send
-            </button>
-          </div>
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-white/10 p-4 flex gap-3">
+          <input
+            type="text"
+            placeholder="Message ClawOS..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !loading) {
+                handleSend();
+              }
+            }}
+            className="flex-1 bg-white rounded-xl px-4 py-3 outline-none"
+          />
+
+          <button
+            onClick={handleSend}
+            disabled={loading}
+            className="bg-[#F15B42] hover:bg-[#e14d35] disabled:opacity-50 text-white px-6 py-3 rounded-xl"
+          >
+            {loading ? "..." : "Send"}
+          </button>
         </div>
       </div>
     </div>

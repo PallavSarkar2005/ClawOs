@@ -175,9 +175,33 @@ async function getMessages(req, res) {
   }
 }
 
+async function deleteConversation(req, res) {
+  try {
+    const { id } = req.params;
+
+    await prisma.conversation.delete({
+      where: {
+        id,
+      },
+    });
+
+    res.json({
+      success: true,
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
 module.exports = {
   createConversation,
   getConversations,
   sendMessage,
   getMessages,
+  deleteConversation,
 };

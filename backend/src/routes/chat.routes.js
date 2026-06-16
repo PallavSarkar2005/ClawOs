@@ -10,6 +10,7 @@ const {
   getConversations,
   sendMessage,
   getMessages,
+  deleteConversation,
 } = require("../controllers/chat.controller");
 
 /*
@@ -25,6 +26,8 @@ router.get("/conversations", protect, getConversations);
 router.post("/message", protect, sendMessage);
 
 router.get("/:conversationId", protect, getMessages);
+
+router.delete("/conversation/:id", protect, deleteConversation);
 
 /*
 |--------------------------------------------------------------------------
