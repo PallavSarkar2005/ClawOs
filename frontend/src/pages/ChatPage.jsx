@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import Sidebar from "../components/Sidebar";
-
+import { getSkills } from "../api/skillApi";
 import {
   createConversation,
   getConversations,
@@ -27,6 +27,10 @@ function ChatPage() {
   const [loading, setLoading] = useState(false);
 
   const [provider, setProviderState] = useState("openrouter");
+
+  const [skills, setSkills] = useState([]);
+
+  const [selectedSkill, setSelectedSkill] = useState("");
 
   // ==================================================
   // AUTO SCROLL
@@ -173,7 +177,11 @@ function ChatPage() {
     setLoading(true);
 
     try {
-      const response = await sendMessage(currentConversation.id, messageText);
+      const response = await sendMessage(
+        currentConversation.id,
+        messageText,
+        selectedSkill,
+      );
 
       const assistantMessage = {
         id: Date.now() + 1,
@@ -200,12 +208,23 @@ function ChatPage() {
     }
   };
 
+  const loadSkills = async () => {
+    try {
+      const data = await getSkills();
+
+      setSkills(data.filter((s) => s.enabled));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   // ==================================================
   // INITIAL LOAD
   // ==================================================
 
   useEffect(() => {
     loadConversations();
+    loadSkills();
   }, []);
 
   // ==================================================
@@ -248,6 +267,21 @@ function ChatPage() {
         {/* HEADER */}
 
         <div className="border-b border-white/10 p-5 flex justify-between items-center">
+          <div className="mt-3">
+            <select
+              value={selectedSkill}
+              onChange={(e) => setSelectedSkill(e.target.value)}
+              className="bg-[#24335f] text-white px-4 py-2 rounded-xl"
+            >
+              <option value="">No Skill</option>
+
+              {skills.map((skill) => (
+                <option key={skill.id} value={skill.id}>
+                  {skill.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <h1 className="text-white text-2xl font-bold">
             {currentConversation ? currentConversation.title : "ClawOS Chat"}
           </h1>

@@ -9,7 +9,11 @@ const axios = require("axios");
 // MAIN AI COORDINATOR
 // ========================================
 
-async function coordinatorAgent(userMessage) {
+async function coordinatorAgent(
+  userMessage,
+  skillPrompt = "",
+  memoryContext = "",
+) {
   try {
     // ========================================
     // GET CURRENT PROVIDER
@@ -28,8 +32,16 @@ async function coordinatorAgent(userMessage) {
         messages: [
           {
             role: "system",
-            content:
-              "You are ClawOS AI, a helpful coding and productivity assistant.",
+            content: `
+You are ClawOS AI.
+
+${skillPrompt}
+
+USER MEMORIES:
+${memoryContext}
+
+Use memories when relevant.
+`,
           },
           {
             role: "user",
@@ -53,8 +65,16 @@ async function coordinatorAgent(userMessage) {
         messages: [
           {
             role: "system",
-            content:
-              "You are ClawOS AI, a helpful coding and productivity assistant.",
+            content: `
+You are ClawOS AI.
+
+${skillPrompt}
+
+USER MEMORIES:
+${memoryContext}
+
+Use memories when relevant.
+`,
           },
           {
             role: "user",
@@ -77,7 +97,15 @@ async function coordinatorAgent(userMessage) {
         `${AI_CONFIG.ollama.baseUrl}/api/generate`,
         {
           model: AI_CONFIG.ollama.model,
-          prompt: userMessage,
+          prompt: `
+${skillPrompt}
+
+USER MEMORIES:
+${memoryContext}
+
+USER:
+${userMessage}
+`,
           stream: false,
         },
       );

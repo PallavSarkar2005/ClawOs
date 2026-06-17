@@ -44,11 +44,10 @@ model Message {
 model Memory {
   id        String   @id @default(uuid())
   content   String
+  createdAt DateTime @default(now())
 
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Skill {
@@ -57,8 +56,12 @@ model Skill {
   description String
   prompt      String
 
+  enabled     Boolean  @default(true)
+  category    String   @default("Custom")
+  usageCount  Int      @default(0)
+
   createdAt   DateTime @default(now())
 
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

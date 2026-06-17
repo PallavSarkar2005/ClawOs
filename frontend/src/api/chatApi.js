@@ -39,10 +39,11 @@ export const getMessages = async (conversationId) => {
   return res.data;
 };
 
-export const sendMessage = async (conversationId, message) => {
+export const sendMessage = async (conversationId, message, skillId = null) => {
   const res = await API.post("/chat/message", {
     conversationId,
     message,
+    skillId,
   });
 
   return res.data;

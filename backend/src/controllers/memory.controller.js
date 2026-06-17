@@ -1,5 +1,9 @@
 const prisma = require("../database/prisma");
 
+// ======================
+// GET MEMORIES
+// ======================
+
 async function getMemories(req, res) {
   try {
     const memories = await prisma.memory.findMany({
@@ -21,26 +25,37 @@ async function getMemories(req, res) {
   }
 }
 
-async function deleteMemory(req, res) {
+// ======================
+// CREATE MEMORY
+// ======================
+
+async function createMemory(req, res) {
   try {
-    const memory = await prisma.memory.findUnique({
-      where: {
-        id: req.params.id,
+    const { content } = req.body;
+
+    const memory = await prisma.memory.create({
+      data: {
+        content,
+        userId: req.user.id,
       },
     });
 
-    if (!memory) {
-      return res.status(404).json({
-        message: "Memory not found",
-      });
-    }
+    res.status(201).json(memory);
+  } catch (error) {
+    console.error(error);
 
-    if (memory.userId !== req.user.id) {
-      return res.status(403).json({
-        message: "Unauthorized",
-      });
-    }
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
+}
 
+// ======================
+// DELETE MEMORY
+// ======================
+
+async function deleteMemory(req, res) {
+  try {
     await prisma.memory.delete({
       where: {
         id: req.params.id,
@@ -61,5 +76,6 @@ async function deleteMemory(req, res) {
 
 module.exports = {
   getMemories,
+  createMemory,
   deleteMemory,
 };

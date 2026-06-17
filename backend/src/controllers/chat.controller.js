@@ -2,6 +2,10 @@ const prisma = require("../database/prisma");
 const coordinatorAgent = require("../agents/coordinator.agent");
 const shouldSaveMemory = require("../agents/memory.agent");
 
+// ======================================
+// CREATE CONVERSATION
+// ======================================
+
 async function createConversation(req, res) {
   try {
     const conversation = await prisma.conversation.create({
@@ -20,6 +24,10 @@ async function createConversation(req, res) {
     });
   }
 }
+
+// ======================================
+// GET CONVERSATIONS
+// ======================================
 
 async function getConversations(req, res) {
   try {
@@ -42,9 +50,13 @@ async function getConversations(req, res) {
   }
 }
 
+// ======================================
+// SEND MESSAGE
+// ======================================
+
 async function sendMessage(req, res) {
   try {
-    const { conversationId, message } = req.body;
+    const { conversationId, message, skillId } = req.body;
 
     if (!conversationId || !message) {
       return res.status(400).json({
@@ -70,6 +82,8 @@ async function sendMessage(req, res) {
       });
     }
 
+    // Save user message
+
     await prisma.message.create({
       data: {
         role: "user",
@@ -77,6 +91,8 @@ async function sendMessage(req, res) {
         conversationId,
       },
     });
+
+    // Rename first chat title
 
     if (conversation.title === "New Chat") {
       await prisma.conversation.update({
@@ -88,6 +104,8 @@ async function sendMessage(req, res) {
         },
       });
     }
+
+    // Auto Memory Save
 
     try {
       if (shouldSaveMemory(message)) {
@@ -102,16 +120,68 @@ async function sendMessage(req, res) {
       console.error("Memory Save Error:", memoryError);
     }
 
+    // ======================================
+    // SKILL SUPPORT
+    // ======================================
+
+    let skillPrompt = "";
+
+    let memoryContext = "";
+
+    if (skillId) {
+      // ======================================
+      // LOAD USER MEMORIES
+      // ======================================
+
+      const memories = await prisma.memory.findMany({
+        where: {
+          userId: req.user.id,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 20,
+      });
+
+      memoryContext = memories.map((m) => `- ${m.content}`).join("\n");
+      const skill = await prisma.skill.findUnique({
+        where: {
+          id: skillId,
+        },
+      });
+
+      if (skill && skill.enabled) {
+        skillPrompt = skill.prompt;
+
+        await prisma.skill.update({
+          where: {
+            id: skill.id,
+          },
+          data: {
+            usageCount: {
+              increment: 1,
+            },
+          },
+        });
+      }
+    }
+
+    // ======================================
+    // AI RESPONSE
+    // ======================================
+
     let aiReply;
 
     try {
-      aiReply = await coordinatorAgent(message);
+      aiReply = await coordinatorAgent(message, skillPrompt, memoryContext);
     } catch (aiError) {
       console.error("AI Error:", aiError);
 
       aiReply =
         "AI service is temporarily unavailable. Please try again later.";
     }
+
+    // Save AI Message
 
     await prisma.message.create({
       data: {
@@ -135,6 +205,10 @@ async function sendMessage(req, res) {
     });
   }
 }
+
+// ======================================
+// GET MESSAGES
+// ======================================
 
 async function getMessages(req, res) {
   try {
@@ -174,6 +248,10 @@ async function getMessages(req, res) {
     });
   }
 }
+
+// ======================================
+// DELETE CONVERSATION
+// ======================================
 
 async function deleteConversation(req, res) {
   try {

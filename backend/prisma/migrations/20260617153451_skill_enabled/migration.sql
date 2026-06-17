@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Skill" ADD COLUMN     "category" TEXT NOT NULL DEFAULT 'Custom',
+ADD COLUMN     "enabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "usageCount" INTEGER NOT NULL DEFAULT 0;
