@@ -1,8 +1,8 @@
 const OpenAI = require("openai");
 
-const openai = new OpenAI({
+const groq = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
   baseURL: "https://api.groq.com/openai/v1",
 });
 
-module.exports = openai;
+module.exports = groq;

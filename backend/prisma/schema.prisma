@@ -17,6 +17,7 @@ model User {
 
   conversations Conversation[]
   memories      Memory[]
+  skills        Skill[]
 }
 
 model Conversation {
@@ -48,4 +49,16 @@ model Memory {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+model Skill {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  prompt      String
+
+  createdAt   DateTime @default(now())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

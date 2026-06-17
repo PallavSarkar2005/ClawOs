@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+
 import Sidebar from "../components/Sidebar";
 
 import {
@@ -9,12 +10,27 @@ import {
   deleteConversation,
 } from "../api/chatApi";
 
+import { setProvider } from "../api/aiApi";
+
 function ChatPage() {
+  // ==================================================
+  // STATE MANAGEMENT
+  // ==================================================
+
   const [conversations, setConversations] = useState([]);
   const [currentConversation, setCurrentConversation] = useState(null);
+
   const [messages, setMessages] = useState([]);
+
   const [input, setInput] = useState("");
+
   const [loading, setLoading] = useState(false);
+
+  const [provider, setProviderState] = useState("openrouter");
+
+  // ==================================================
+  // AUTO SCROLL
+  // ==================================================
 
   const messagesEndRef = useRef(null);
 
@@ -23,6 +39,10 @@ function ChatPage() {
       behavior: "smooth",
     });
   };
+
+  // ==================================================
+  // LOAD CONVERSATIONS
+  // ==================================================
 
   const loadConversations = async () => {
     try {
@@ -38,6 +58,10 @@ function ChatPage() {
     }
   };
 
+  // ==================================================
+  // LOAD MESSAGES
+  // ==================================================
+
   const loadMessages = async (conversationId) => {
     try {
       const data = await getMessages(conversationId);
@@ -47,6 +71,10 @@ function ChatPage() {
       console.error("Load messages error:", error);
     }
   };
+
+  // ==================================================
+  // CREATE NEW CHAT
+  // ==================================================
 
   const handleNewChat = async () => {
     try {
@@ -62,11 +90,19 @@ function ChatPage() {
     }
   };
 
+  // ==================================================
+  // SELECT CHAT
+  // ==================================================
+
   const handleSelectConversation = async (chat) => {
     setCurrentConversation(chat);
 
     await loadMessages(chat.id);
   };
+
+  // ==================================================
+  // DELETE CHAT
+  // ==================================================
 
   const handleDeleteConversation = async (id) => {
     try {
@@ -85,6 +121,7 @@ function ChatPage() {
           await loadMessages(updatedConversations[0].id);
         } else {
           setCurrentConversation(null);
+
           setMessages([]);
         }
       }
@@ -92,6 +129,26 @@ function ChatPage() {
       console.error("Delete conversation error:", error);
     }
   };
+
+  // ==================================================
+  // CHANGE AI PROVIDER
+  // ==================================================
+
+  const handleProviderChange = async (e) => {
+    try {
+      const selectedProvider = e.target.value;
+
+      setProviderState(selectedProvider);
+
+      await setProvider(selectedProvider);
+    } catch (error) {
+      console.error("Provider change error:", error);
+    }
+  };
+
+  // ==================================================
+  // SEND MESSAGE
+  // ==================================================
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -135,7 +192,7 @@ function ChatPage() {
         {
           id: Date.now() + 2,
           role: "assistant",
-          content: "Something went wrong. Please try again.",
+          content: "⚠️ Something went wrong. Please try again.",
         },
       ]);
     } finally {
@@ -143,9 +200,17 @@ function ChatPage() {
     }
   };
 
+  // ==================================================
+  // INITIAL LOAD
+  // ==================================================
+
   useEffect(() => {
     loadConversations();
   }, []);
+
+  // ==================================================
+  // LOAD MESSAGES WHEN CHAT CHANGES
+  // ==================================================
 
   useEffect(() => {
     if (currentConversation?.id) {
@@ -153,12 +218,22 @@ function ChatPage() {
     }
   }, [currentConversation]);
 
+  // ==================================================
+  // AUTO SCROLL TO LATEST MESSAGE
+  // ==================================================
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
 
+  // ==================================================
+  // UI
+  // ==================================================
+
   return (
     <div className="flex h-screen bg-[#1B2748]">
+      {/* SIDEBAR */}
+
       <Sidebar
         conversations={conversations}
         currentConversation={currentConversation}
@@ -167,15 +242,33 @@ function ChatPage() {
         onDelete={handleDeleteConversation}
       />
 
+      {/* MAIN CHAT AREA */}
+
       <div className="flex flex-col flex-1">
-        {/* Header */}
-        <div className="border-b border-white/10 p-5">
+        {/* HEADER */}
+
+        <div className="border-b border-white/10 p-5 flex justify-between items-center">
           <h1 className="text-white text-2xl font-bold">
             {currentConversation ? currentConversation.title : "ClawOS Chat"}
           </h1>
+
+          {/* AI PROVIDER SELECTOR */}
+
+          <select
+            value={provider}
+            onChange={handleProviderChange}
+            className="bg-[#24335f] text-white px-4 py-2 rounded-xl outline-none"
+          >
+            <option value="openrouter">OpenRouter</option>
+
+            <option value="groq">Groq</option>
+
+            <option value="ollama">Ollama</option>
+          </select>
         </div>
 
-        {/* Messages */}
+        {/* CHAT MESSAGES */}
+
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.length === 0 && (
             <div className="text-center text-white/50 mt-20">
@@ -191,7 +284,7 @@ function ChatPage() {
               }`}
             >
               <div
-                className={`max-w-2xl px-5 py-3 rounded-2xl break-words ${
+                className={`max-w-2xl px-5 py-3 rounded-2xl break-words whitespace-pre-wrap ${
                   msg.role === "user"
                     ? "bg-[#F15B42] text-white"
                     : "bg-[#24335f] text-white"
@@ -201,6 +294,8 @@ function ChatPage() {
               </div>
             </div>
           ))}
+
+          {/* THINKING INDICATOR */}
 
           {loading && (
             <div className="flex justify-start">
@@ -213,7 +308,8 @@ function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
+        {/* MESSAGE INPUT */}
+
         <div className="border-t border-white/10 p-4 flex gap-3">
           <input
             type="text"
