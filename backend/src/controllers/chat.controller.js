@@ -1,6 +1,7 @@
 const prisma = require("../database/prisma");
 const coordinatorAgent = require("../agents/coordinator.agent");
 const shouldSaveMemory = require("../agents/memory.agent");
+const routeSkill = require("../agents/router.agent");
 
 // ======================================
 // CREATE CONVERSATION
@@ -56,13 +57,17 @@ async function getConversations(req, res) {
 
 async function sendMessage(req, res) {
   try {
-    const { conversationId, message, skillId } = req.body;
+    const { conversationId, message, skillId, workflowId } = req.body;
 
     if (!conversationId || !message) {
       return res.status(400).json({
         message: "conversationId and message required",
       });
     }
+
+    // ======================================
+    // LOAD CONVERSATION
+    // ======================================
 
     const conversation = await prisma.conversation.findUnique({
       where: {
@@ -82,7 +87,9 @@ async function sendMessage(req, res) {
       });
     }
 
-    // Save user message
+    // ======================================
+    // SAVE USER MESSAGE
+    // ======================================
 
     await prisma.message.create({
       data: {
@@ -92,7 +99,9 @@ async function sendMessage(req, res) {
       },
     });
 
-    // Rename first chat title
+    // ======================================
+    // UPDATE CHAT TITLE
+    // ======================================
 
     if (conversation.title === "New Chat") {
       await prisma.conversation.update({
@@ -105,7 +114,9 @@ async function sendMessage(req, res) {
       });
     }
 
-    // Auto Memory Save
+    // ======================================
+    // AUTO MEMORY SAVE
+    // ======================================
 
     try {
       if (shouldSaveMemory(message)) {
@@ -121,18 +132,12 @@ async function sendMessage(req, res) {
     }
 
     // ======================================
-    // SKILL SUPPORT
+    // LOAD MEMORY CONTEXT
     // ======================================
-
-    let skillPrompt = "";
 
     let memoryContext = "";
 
-    if (skillId) {
-      // ======================================
-      // LOAD USER MEMORIES
-      // ======================================
-
+    try {
       const memories = await prisma.memory.findMany({
         where: {
           userId: req.user.id,
@@ -143,7 +148,21 @@ async function sendMessage(req, res) {
         take: 20,
       });
 
-      memoryContext = memories.map((m) => `- ${m.content}`).join("\n");
+      memoryContext = memories
+        .map((memory) => `- ${memory.content}`)
+        .join("\n");
+    } catch (memoryError) {
+      console.error("Memory Load Error:", memoryError);
+    }
+
+    // ======================================
+    // SKILLS
+    // ======================================
+
+    let selectedSkill = null;
+    let skillPrompt = "";
+
+    if (skillId) {
       const skill = await prisma.skill.findUnique({
         where: {
           id: skillId,
@@ -151,6 +170,8 @@ async function sendMessage(req, res) {
       });
 
       if (skill && skill.enabled) {
+        selectedSkill = skill;
+
         skillPrompt = skill.prompt;
 
         await prisma.skill.update({
@@ -167,13 +188,62 @@ async function sendMessage(req, res) {
     }
 
     // ======================================
+    // AUTO SKILL ROUTER
+    // ======================================
+
+    if (!skillId) {
+      selectedSkill = await routeSkill(req.user.id, message);
+
+      if (selectedSkill) {
+        skillPrompt = selectedSkill.prompt;
+
+        await prisma.skill.update({
+          where: {
+            id: selectedSkill.id,
+          },
+          data: {
+            usageCount: {
+              increment: 1,
+            },
+          },
+        });
+      }
+    }
+
+    // ======================================
+    // WORKFLOWS
+    // ======================================
+
+    let workflowPrompt = "";
+    let selectedWorkflow = null;
+
+    if (workflowId) {
+      const workflow = await prisma.workflow.findUnique({
+        where: {
+          id: workflowId,
+        },
+      });
+
+      if (workflow && workflow.enabled) {
+        selectedWorkflow = workflow;
+
+        workflowPrompt = workflow.prompt;
+      }
+    }
+
+    // ======================================
     // AI RESPONSE
     // ======================================
 
-    let aiReply;
+    let aiReply = "";
 
     try {
-      aiReply = await coordinatorAgent(message, skillPrompt, memoryContext);
+      aiReply = await coordinatorAgent(
+        message,
+        skillPrompt,
+        workflowPrompt,
+        memoryContext,
+      );
     } catch (aiError) {
       console.error("AI Error:", aiError);
 
@@ -181,7 +251,9 @@ async function sendMessage(req, res) {
         "AI service is temporarily unavailable. Please try again later.";
     }
 
-    // Save AI Message
+    // ======================================
+    // SAVE AI MESSAGE
+    // ======================================
 
     await prisma.message.create({
       data: {
@@ -191,14 +263,22 @@ async function sendMessage(req, res) {
       },
     });
 
-    res.json({
+    // ======================================
+    // RESPONSE
+    // ======================================
+
+    return res.json({
       success: true,
       reply: aiReply,
+
+      skill: selectedSkill?.name || null,
+
+      workflow: selectedWorkflow?.name || null,
     });
   } catch (error) {
     console.error(error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message,
       code: error.code || null,

@@ -12,16 +12,50 @@ const axios = require("axios");
 async function coordinatorAgent(
   userMessage,
   skillPrompt = "",
+  workflowPrompt = "",
   memoryContext = "",
 ) {
   try {
     // ========================================
-    // GET CURRENT PROVIDER
+    // CURRENT PROVIDER
     // ========================================
 
     const { getCurrentProvider } = require("../controllers/ai.controller");
 
     const currentProvider = getCurrentProvider();
+
+    // ========================================
+    // SYSTEM PROMPT
+    // ========================================
+
+    const systemPrompt = `
+You are ClawOS AI.
+
+========================
+ACTIVE SKILL
+========================
+
+${skillPrompt || "None"}
+
+========================
+ACTIVE WORKFLOW
+========================
+
+${workflowPrompt || "None"}
+
+========================
+USER MEMORIES
+========================
+
+${memoryContext || "No memories found"}
+
+Instructions:
+- Follow the skill instructions when provided.
+- Follow workflow instructions when provided.
+- Use memories only when relevant.
+- Be concise and helpful.
+`;
+
     // ========================================
     // OPENROUTER
     // ========================================
@@ -29,25 +63,18 @@ async function coordinatorAgent(
     if (currentProvider === "openrouter") {
       const response = await openrouter.chat.completions.create({
         model: AI_CONFIG.openrouter.model,
+
         messages: [
           {
             role: "system",
-            content: `
-You are ClawOS AI.
-
-${skillPrompt}
-
-USER MEMORIES:
-${memoryContext}
-
-Use memories when relevant.
-`,
+            content: systemPrompt,
           },
           {
             role: "user",
             content: userMessage,
           },
         ],
+
         temperature: 0.7,
         max_tokens: 1024,
       });
@@ -62,25 +89,18 @@ Use memories when relevant.
     if (currentProvider === "groq") {
       const response = await groq.chat.completions.create({
         model: AI_CONFIG.groq.model,
+
         messages: [
           {
             role: "system",
-            content: `
-You are ClawOS AI.
-
-${skillPrompt}
-
-USER MEMORIES:
-${memoryContext}
-
-Use memories when relevant.
-`,
+            content: systemPrompt,
           },
           {
             role: "user",
             content: userMessage,
           },
         ],
+
         temperature: 0.7,
         max_tokens: 1024,
       });
@@ -97,15 +117,17 @@ Use memories when relevant.
         `${AI_CONFIG.ollama.baseUrl}/api/generate`,
         {
           model: AI_CONFIG.ollama.model,
+
           prompt: `
-${skillPrompt}
+${systemPrompt}
 
-USER MEMORIES:
-${memoryContext}
+========================
+USER MESSAGE
+========================
 
-USER:
 ${userMessage}
 `,
+
           stream: false,
         },
       );
@@ -126,6 +148,7 @@ ${userMessage}
 
       const response = await groq.chat.completions.create({
         model: AI_CONFIG.groq.model,
+
         messages: [
           {
             role: "user",
@@ -140,7 +163,7 @@ ${userMessage}
     }
 
     // ========================================
-    // RATE LIMIT / QUOTA
+    // RATE LIMIT
     // ========================================
 
     if (

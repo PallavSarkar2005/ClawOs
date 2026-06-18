@@ -18,6 +18,7 @@ model User {
   conversations Conversation[]
   memories      Memory[]
   skills        Skill[]
+  workflows Workflow[]
 }
 
 model Conversation {
@@ -59,6 +60,20 @@ model Skill {
   enabled     Boolean  @default(true)
   category    String   @default("Custom")
   usageCount  Int      @default(0)
+
+  createdAt   DateTime @default(now())
+
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  prompt      String
+
+  enabled     Boolean  @default(true)
 
   createdAt   DateTime @default(now())
 

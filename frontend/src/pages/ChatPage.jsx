@@ -9,7 +9,7 @@ import {
   sendMessage,
   deleteConversation,
 } from "../api/chatApi";
-
+import { getWorkflows } from "../api/workflowApi";
 import { setProvider } from "../api/aiApi";
 
 function ChatPage() {
@@ -31,6 +31,12 @@ function ChatPage() {
   const [skills, setSkills] = useState([]);
 
   const [selectedSkill, setSelectedSkill] = useState("");
+
+  const [activeSkill, setActiveSkill] = useState(null);
+
+  const [workflows, setWorkflows] = useState([]);
+
+  const [selectedWorkflow, setSelectedWorkflow] = useState("");
 
   // ==================================================
   // AUTO SCROLL
@@ -181,7 +187,14 @@ function ChatPage() {
         currentConversation.id,
         messageText,
         selectedSkill,
+        selectedWorkflow,
       );
+
+      if (response.skill) {
+        console.log("Auto Selected Skill:", response.skill);
+      }
+
+      setActiveSkill(response.skill);
 
       const assistantMessage = {
         id: Date.now() + 1,
@@ -208,11 +221,29 @@ function ChatPage() {
     }
   };
 
+  // ==================================================
+  // LOAD SKILLS
+  // ==================================================
+
   const loadSkills = async () => {
     try {
       const data = await getSkills();
 
       setSkills(data.filter((s) => s.enabled));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // ==================================================
+  // LOAD WORKFLOWS
+  // ==================================================
+
+  const loadWorkflows = async () => {
+    try {
+      const data = await getWorkflows();
+
+      setWorkflows(data);
     } catch (error) {
       console.error(error);
     }
@@ -225,6 +256,7 @@ function ChatPage() {
   useEffect(() => {
     loadConversations();
     loadSkills();
+    loadWorkflows();
   }, []);
 
   // ==================================================
@@ -267,7 +299,9 @@ function ChatPage() {
         {/* HEADER */}
 
         <div className="border-b border-white/10 p-5 flex justify-between items-center">
-          <div className="mt-3">
+          <div className="flex gap-3 mt-3">
+            {/* Skill Selector */}
+
             <select
               value={selectedSkill}
               onChange={(e) => setSelectedSkill(e.target.value)}
@@ -281,10 +315,34 @@ function ChatPage() {
                 </option>
               ))}
             </select>
+
+            {/* Workflow Selector */}
+
+            <select
+              value={selectedWorkflow}
+              onChange={(e) => setSelectedWorkflow(e.target.value)}
+              className="bg-[#24335f] text-white px-4 py-2 rounded-xl"
+            >
+              <option value="">No Workflow</option>
+
+              {workflows.map((workflow) => (
+                <option key={workflow.id} value={workflow.id}>
+                  {workflow.name}
+                </option>
+              ))}
+            </select>
           </div>
-          <h1 className="text-white text-2xl font-bold">
-            {currentConversation ? currentConversation.title : "ClawOS Chat"}
-          </h1>
+          <div>
+            <h1 className="text-white text-2xl font-bold">
+              {currentConversation ? currentConversation.title : "ClawOS Chat"}
+            </h1>
+
+            {activeSkill && (
+              <div className="mt-2 inline-block bg-[#24335f] px-3 py-1 rounded-xl text-sm text-white">
+                🧠 Skill: {activeSkill}
+              </div>
+            )}
+          </div>
 
           {/* AI PROVIDER SELECTOR */}
 

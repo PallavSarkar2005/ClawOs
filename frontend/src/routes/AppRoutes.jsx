@@ -9,7 +9,6 @@ import MemoryPage from "../pages/MemoryPage";
 import WorkflowsPage from "../pages/WorkflowsPage";
 import SettingsPage from "../pages/SettingsPage";
 import SkillsPage from "../pages/SkillsPage";
-
 import ProtectedRoute from "./ProtectedRoute";
 
 function AppRoutes() {
