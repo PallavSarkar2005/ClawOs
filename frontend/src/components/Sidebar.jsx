@@ -124,6 +124,17 @@ function Sidebar({
         >
           Settings
         </Link>
+
+        <Link
+          to="/documents"
+          className={`block p-3 rounded-xl ${
+            location.pathname === "/documents"
+              ? "bg-white/20 text-white"
+              : "text-white hover:bg-white/10"
+          }`}
+        >
+          Documents
+        </Link>
       </div>
     </div>
   );

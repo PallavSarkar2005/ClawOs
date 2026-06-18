@@ -7,6 +7,7 @@ const aiRoutes = require("./routes/ai.routes");
 const skillRoutes = require("./routes/skill.routes");
 const memoryRoutes = require("./routes/memory.routes");
 const workflowRoutes = require("./routes/workflow.routes");
+const documentRoutes = require("./routes/document.routes");
 
 const app = express();
 
@@ -33,5 +34,7 @@ app.use("/api/skills", skillRoutes);
 app.use("/api/memory", memoryRoutes);
 
 app.use("/api/workflows", workflowRoutes);
+
+app.use("/api/documents", documentRoutes);
 
 module.exports = app;

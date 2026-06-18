@@ -19,6 +19,7 @@ model User {
   memories      Memory[]
   skills        Skill[]
   workflows Workflow[]
+  documents     Document[]
 }
 
 model Conversation {
@@ -79,4 +80,16 @@ model Workflow {
 
   userId      String
   user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  name      String
+  path      String
+  content   String
+
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -10,6 +10,7 @@ import WorkflowsPage from "../pages/WorkflowsPage";
 import SettingsPage from "../pages/SettingsPage";
 import SkillsPage from "../pages/SkillsPage";
 import ProtectedRoute from "./ProtectedRoute";
+import DocumentsPage from "../pages/DocumentsPage";
 
 function AppRoutes() {
   return (
@@ -62,6 +63,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/documents"
+          element={
+            <ProtectedRoute>
+              <DocumentsPage />
             </ProtectedRoute>
           }
         />
