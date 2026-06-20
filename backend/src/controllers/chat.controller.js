@@ -3,6 +3,7 @@ const coordinatorAgent = require("../agents/coordinator.agent");
 const shouldSaveMemory = require("../agents/memory.agent");
 const routeSkill = require("../agents/router.agent");
 const webSearch = require("../agents/websearch.agent");
+const searchMemories = require("../agents/memory-search.agent");
 
 // ======================================
 // CREATE CONVERSATION
@@ -156,9 +157,7 @@ async function sendMessage(req, res) {
         take: 20,
       });
 
-      memoryContext = memories
-        .map((memory) => `- ${memory.content}`)
-        .join("\n");
+      memoryContext = await searchMemories(req.user.id, message);
     } catch (memoryError) {
       console.error("Memory Load Error:", memoryError);
     }

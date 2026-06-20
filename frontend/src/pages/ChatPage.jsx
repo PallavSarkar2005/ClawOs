@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import Sidebar from "../components/Sidebar";
 import { getSkills } from "../api/skillApi";
@@ -19,31 +21,18 @@ function ChatPage() {
   // ==================================================
 
   const [conversations, setConversations] = useState([]);
-
   const [currentConversation, setCurrentConversation] = useState(null);
-
   const [messages, setMessages] = useState([]);
-
   const [input, setInput] = useState("");
-
   const [loading, setLoading] = useState(false);
-
   const [provider, setProviderState] = useState("openrouter");
-
   const [skills, setSkills] = useState([]);
-
   const [selectedSkill, setSelectedSkill] = useState("");
-
   const [activeSkill, setActiveSkill] = useState(null);
-
   const [workflows, setWorkflows] = useState([]);
-
   const [selectedWorkflow, setSelectedWorkflow] = useState("");
-
   const [documents, setDocuments] = useState([]);
-
   const [selectedDocument, setSelectedDocument] = useState("");
-
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // ==================================================
@@ -65,7 +54,6 @@ function ChatPage() {
   const loadConversations = async () => {
     try {
       const data = await getConversations();
-
       setConversations(data);
 
       if (data.length > 0 && !currentConversation) {
@@ -83,7 +71,6 @@ function ChatPage() {
   const loadMessages = async (conversationId) => {
     try {
       const data = await getMessages(conversationId);
-
       setMessages(data);
     } catch (error) {
       console.error("Load messages error:", error);
@@ -97,11 +84,8 @@ function ChatPage() {
   const handleNewChat = async () => {
     try {
       const chat = await createConversation();
-
       setConversations((prev) => [chat, ...prev]);
-
       setCurrentConversation(chat);
-
       setMessages([]);
     } catch (error) {
       console.error("Create conversation error:", error);
@@ -114,7 +98,6 @@ function ChatPage() {
 
   const handleSelectConversation = async (chat) => {
     setCurrentConversation(chat);
-
     await loadMessages(chat.id);
   };
 
@@ -125,21 +108,17 @@ function ChatPage() {
   const handleDeleteConversation = async (id) => {
     try {
       await deleteConversation(id);
-
       const updatedConversations = conversations.filter(
         (chat) => chat.id !== id,
       );
-
       setConversations(updatedConversations);
 
       if (currentConversation?.id === id) {
         if (updatedConversations.length > 0) {
           setCurrentConversation(updatedConversations[0]);
-
           await loadMessages(updatedConversations[0].id);
         } else {
           setCurrentConversation(null);
-
           setMessages([]);
         }
       }
@@ -155,9 +134,7 @@ function ChatPage() {
   const handleProviderChange = async (e) => {
     try {
       const selectedProvider = e.target.value;
-
       setProviderState(selectedProvider);
-
       await setProvider(selectedProvider);
     } catch (error) {
       console.error("Provider change error:", error);
@@ -171,7 +148,6 @@ function ChatPage() {
   const loadDocuments = async () => {
     try {
       const data = await getDocuments();
-
       setDocuments(data);
     } catch (error) {
       console.error(error);
@@ -197,11 +173,8 @@ function ChatPage() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-
     const messageText = input;
-
     setInput("");
-
     setLoading(true);
 
     try {
@@ -227,11 +200,9 @@ function ChatPage() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-
       await loadConversations();
     } catch (error) {
       console.error("Send message error:", error);
-
       setMessages((prev) => [
         ...prev,
         {
@@ -252,7 +223,6 @@ function ChatPage() {
   const loadSkills = async () => {
     try {
       const data = await getSkills();
-
       setSkills(data.filter((s) => s.enabled));
     } catch (error) {
       console.error(error);
@@ -266,7 +236,6 @@ function ChatPage() {
   const loadWorkflows = async () => {
     try {
       const data = await getWorkflows();
-
       setWorkflows(data);
     } catch (error) {
       console.error(error);
@@ -309,7 +278,6 @@ function ChatPage() {
   return (
     <div className="flex h-screen bg-[#1B2748]">
       {/* SIDEBAR */}
-
       <Sidebar
         conversations={conversations}
         currentConversation={currentConversation}
@@ -319,10 +287,8 @@ function ChatPage() {
       />
 
       {/* MAIN CHAT AREA */}
-
       <div className="flex flex-col flex-1">
         {/* HEADER */}
-
         <div className="border-b border-white/10 p-5 flex justify-between items-center">
           <div className="flex gap-3 mt-3">
             <label className="flex items-center gap-2 text-white">
@@ -335,14 +301,12 @@ function ChatPage() {
             </label>
 
             {/* Skill Selector */}
-
             <select
               value={selectedSkill}
               onChange={(e) => setSelectedSkill(e.target.value)}
               className="bg-[#24335f] text-white px-4 py-2 rounded-xl"
             >
               <option value="">No Skill</option>
-
               {skills.map((skill) => (
                 <option key={skill.id} value={skill.id}>
                   {skill.name}
@@ -357,7 +321,6 @@ function ChatPage() {
               className="bg-[#24335f] text-white px-4 py-2 rounded-xl"
             >
               <option value="">No Document</option>
-
               {documents.map((document) => (
                 <option key={document.id} value={document.id}>
                   {document.name}
@@ -366,14 +329,12 @@ function ChatPage() {
             </select>
 
             {/* Workflow Selector */}
-
             <select
               value={selectedWorkflow}
               onChange={(e) => setSelectedWorkflow(e.target.value)}
               className="bg-[#24335f] text-white px-4 py-2 rounded-xl"
             >
               <option value="">No Workflow</option>
-
               {workflows.map((workflow) => (
                 <option key={workflow.id} value={workflow.id}>
                   {workflow.name}
@@ -394,22 +355,18 @@ function ChatPage() {
           </div>
 
           {/* AI PROVIDER SELECTOR */}
-
           <select
             value={provider}
             onChange={handleProviderChange}
             className="bg-[#24335f] text-white px-4 py-2 rounded-xl outline-none"
           >
             <option value="openrouter">OpenRouter</option>
-
             <option value="groq">Groq</option>
-
             <option value="ollama">Ollama</option>
           </select>
         </div>
 
         {/* CHAT MESSAGES */}
-
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.length === 0 && (
             <div className="text-center text-white/50 mt-20">
@@ -425,19 +382,56 @@ function ChatPage() {
               }`}
             >
               <div
-                className={`max-w-2xl px-5 py-3 rounded-2xl break-words whitespace-pre-wrap ${
+                className={`max-w-2xl px-5 py-3 rounded-2xl break-words ${
                   msg.role === "user"
                     ? "bg-[#F15B42] text-white"
                     : "bg-[#24335f] text-white"
                 }`}
               >
-                {msg.content}
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code(props) {
+                      const { children } = props;
+                      return (
+                        <pre className="bg-black/30 p-3 rounded-lg overflow-x-auto mt-2">
+                          <code>{children}</code>
+                        </pre>
+                      );
+                    },
+                    h1(props) {
+                      return (
+                        <h1 className="text-3xl font-bold mb-3">
+                          {props.children}
+                        </h1>
+                      );
+                    },
+                    h2(props) {
+                      return (
+                        <h2 className="text-2xl font-bold mb-2">
+                          {props.children}
+                        </h2>
+                      );
+                    },
+                    ul(props) {
+                      return (
+                        <ul className="list-disc ml-6">{props.children}</ul>
+                      );
+                    },
+                    ol(props) {
+                      return (
+                        <ol className="list-decimal ml-6">{props.children}</ol>
+                      );
+                    },
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
               </div>
             </div>
           ))}
 
           {/* THINKING INDICATOR */}
-
           {loading && (
             <div className="flex justify-start">
               <div className="bg-[#24335f] text-white px-5 py-3 rounded-2xl">
@@ -450,7 +444,6 @@ function ChatPage() {
         </div>
 
         {/* MESSAGE INPUT */}
-
         <div className="border-t border-white/10 p-4 flex gap-3">
           <input
             type="text"
