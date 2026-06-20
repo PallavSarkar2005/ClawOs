@@ -13,6 +13,7 @@ async function coordinatorAgent(
   memoryContext = "",
   documentContext = "",
   webContext = "",
+  toolContext = "",
 ) {
   try {
     // ========================================
@@ -39,6 +40,9 @@ ${documentContext}
 
 WEB SEARCH:
 ${webContext}
+
+TOOLS:
+${toolContext}
 
 Use web results if available.
 Use document context if available.

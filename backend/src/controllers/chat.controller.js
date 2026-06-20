@@ -4,6 +4,8 @@ const shouldSaveMemory = require("../agents/memory.agent");
 const routeSkill = require("../agents/router.agent");
 const webSearch = require("../agents/websearch.agent");
 const searchMemories = require("../agents/memory-search.agent");
+const chooseTool = require("../agents/tool-router.agent");
+const executeTool = require("../agents/tools.agent");
 
 // ======================================
 // CREATE CONVERSATION
@@ -271,6 +273,18 @@ async function sendMessage(req, res) {
     }
 
     // ======================================
+    // Tool Context
+    // ======================================
+
+    let toolContext = "";
+
+    const tool = await chooseTool(message);
+
+    if (tool) {
+      toolContext = await executeTool(tool, {}, req.user.id);
+    }
+
+    // ======================================
     // AI RESPONSE
     // ======================================
 
@@ -283,6 +297,7 @@ async function sendMessage(req, res) {
         memoryContext,
         documentContext,
         webContext,
+        toolContext,
       );
     } catch (aiError) {
       console.error("AI Error:", aiError);
