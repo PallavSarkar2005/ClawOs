@@ -44,12 +44,16 @@ export const sendMessage = async (
   message,
   skillId,
   workflowId,
+  documentId,
+  webSearchEnabled,
 ) => {
   const res = await API.post("/chat/message", {
     conversationId,
     message,
     skillId,
     workflowId,
+    documentId,
+    webSearchEnabled,
   });
 
   return res.data;

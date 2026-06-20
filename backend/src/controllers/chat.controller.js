@@ -2,6 +2,7 @@ const prisma = require("../database/prisma");
 const coordinatorAgent = require("../agents/coordinator.agent");
 const shouldSaveMemory = require("../agents/memory.agent");
 const routeSkill = require("../agents/router.agent");
+const webSearch = require("../agents/websearch.agent");
 
 // ======================================
 // CREATE CONVERSATION
@@ -57,7 +58,14 @@ async function getConversations(req, res) {
 
 async function sendMessage(req, res) {
   try {
-    const { conversationId, message, skillId, workflowId } = req.body;
+    const {
+      conversationId,
+      message,
+      skillId,
+      workflowId,
+      documentId,
+      webSearchEnabled,
+    } = req.body;
 
     if (!conversationId || !message) {
       return res.status(400).json({
@@ -232,6 +240,38 @@ async function sendMessage(req, res) {
     }
 
     // ======================================
+    // DOCUMENT CONTEXT SETUP & LOADING
+    // ======================================
+
+    let documentContext = "";
+
+    if (documentId) {
+      const document = await prisma.document.findUnique({
+        where: {
+          id: documentId,
+        },
+      });
+
+      if (document) {
+        documentContext = document.content.slice(0, 15000);
+      }
+    }
+
+    // ======================================
+    // WEB SEARCH CONTEXT
+    // ======================================
+
+    let webContext = "";
+
+    if (webSearchEnabled) {
+      try {
+        webContext = await webSearch(message);
+      } catch (searchError) {
+        console.error("Web Search Error:", searchError);
+      }
+    }
+
+    // ======================================
     // AI RESPONSE
     // ======================================
 
@@ -241,8 +281,9 @@ async function sendMessage(req, res) {
       aiReply = await coordinatorAgent(
         message,
         skillPrompt,
-        workflowPrompt,
         memoryContext,
+        documentContext,
+        webContext,
       );
     } catch (aiError) {
       console.error("AI Error:", aiError);

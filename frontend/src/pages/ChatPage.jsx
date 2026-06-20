@@ -11,6 +11,7 @@ import {
 } from "../api/chatApi";
 import { getWorkflows } from "../api/workflowApi";
 import { setProvider } from "../api/aiApi";
+import { getDocuments } from "../api/documentApi";
 
 function ChatPage() {
   // ==================================================
@@ -18,6 +19,7 @@ function ChatPage() {
   // ==================================================
 
   const [conversations, setConversations] = useState([]);
+
   const [currentConversation, setCurrentConversation] = useState(null);
 
   const [messages, setMessages] = useState([]);
@@ -37,6 +39,12 @@ function ChatPage() {
   const [workflows, setWorkflows] = useState([]);
 
   const [selectedWorkflow, setSelectedWorkflow] = useState("");
+
+  const [documents, setDocuments] = useState([]);
+
+  const [selectedDocument, setSelectedDocument] = useState("");
+
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // ==================================================
   // AUTO SCROLL
@@ -157,6 +165,20 @@ function ChatPage() {
   };
 
   // ==================================================
+  // Load Documents
+  // ==================================================
+
+  const loadDocuments = async () => {
+    try {
+      const data = await getDocuments();
+
+      setDocuments(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // ==================================================
   // SEND MESSAGE
   // ==================================================
 
@@ -188,6 +210,8 @@ function ChatPage() {
         messageText,
         selectedSkill,
         selectedWorkflow,
+        selectedDocument,
+        webSearchEnabled,
       );
 
       if (response.skill) {
@@ -257,6 +281,7 @@ function ChatPage() {
     loadConversations();
     loadSkills();
     loadWorkflows();
+    loadDocuments();
   }, []);
 
   // ==================================================
@@ -300,6 +325,15 @@ function ChatPage() {
 
         <div className="border-b border-white/10 p-5 flex justify-between items-center">
           <div className="flex gap-3 mt-3">
+            <label className="flex items-center gap-2 text-white">
+              <input
+                type="checkbox"
+                checked={webSearchEnabled}
+                onChange={(e) => setWebSearchEnabled(e.target.checked)}
+              />
+              Web Search
+            </label>
+
             {/* Skill Selector */}
 
             <select
@@ -312,6 +346,21 @@ function ChatPage() {
               {skills.map((skill) => (
                 <option key={skill.id} value={skill.id}>
                   {skill.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Select Documents */}
+            <select
+              value={selectedDocument}
+              onChange={(e) => setSelectedDocument(e.target.value)}
+              className="bg-[#24335f] text-white px-4 py-2 rounded-xl"
+            >
+              <option value="">No Document</option>
+
+              {documents.map((document) => (
+                <option key={document.id} value={document.id}>
+                  {document.name}
                 </option>
               ))}
             </select>

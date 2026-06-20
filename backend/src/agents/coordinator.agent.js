@@ -1,8 +1,6 @@
 const AI_CONFIG = require("../config/ai.config");
-
 const openrouter = require("../services/openrouter");
 const groq = require("../services/groq");
-
 const axios = require("axios");
 
 // ========================================
@@ -12,8 +10,9 @@ const axios = require("axios");
 async function coordinatorAgent(
   userMessage,
   skillPrompt = "",
-  workflowPrompt = "",
   memoryContext = "",
+  documentContext = "",
+  webContext = "",
 ) {
   try {
     // ========================================
@@ -21,7 +20,6 @@ async function coordinatorAgent(
     // ========================================
 
     const { getCurrentProvider } = require("../controllers/ai.controller");
-
     const currentProvider = getCurrentProvider();
 
     // ========================================
@@ -31,29 +29,20 @@ async function coordinatorAgent(
     const systemPrompt = `
 You are ClawOS AI.
 
-========================
-ACTIVE SKILL
-========================
+${skillPrompt}
 
-${skillPrompt || "None"}
+USER MEMORIES:
+${memoryContext}
 
-========================
-ACTIVE WORKFLOW
-========================
+DOCUMENT:
+${documentContext}
 
-${workflowPrompt || "None"}
+WEB SEARCH:
+${webContext}
 
-========================
-USER MEMORIES
-========================
-
-${memoryContext || "No memories found"}
-
-Instructions:
-- Follow the skill instructions when provided.
-- Follow workflow instructions when provided.
-- Use memories only when relevant.
-- Be concise and helpful.
+Use web results if available.
+Use document context if available.
+Use memories when relevant.
 `;
 
     // ========================================
@@ -63,7 +52,6 @@ Instructions:
     if (currentProvider === "openrouter") {
       const response = await openrouter.chat.completions.create({
         model: AI_CONFIG.openrouter.model,
-
         messages: [
           {
             role: "system",
@@ -74,7 +62,6 @@ Instructions:
             content: userMessage,
           },
         ],
-
         temperature: 0.7,
         max_tokens: 1024,
       });
@@ -89,7 +76,6 @@ Instructions:
     if (currentProvider === "groq") {
       const response = await groq.chat.completions.create({
         model: AI_CONFIG.groq.model,
-
         messages: [
           {
             role: "system",
@@ -100,7 +86,6 @@ Instructions:
             content: userMessage,
           },
         ],
-
         temperature: 0.7,
         max_tokens: 1024,
       });
@@ -117,7 +102,6 @@ Instructions:
         `${AI_CONFIG.ollama.baseUrl}/api/generate`,
         {
           model: AI_CONFIG.ollama.model,
-
           prompt: `
 ${systemPrompt}
 
@@ -127,7 +111,6 @@ USER MESSAGE
 
 ${userMessage}
 `,
-
           stream: false,
         },
       );
@@ -145,10 +128,8 @@ ${userMessage}
 
     try {
       console.log("Trying Groq fallback...");
-
       const response = await groq.chat.completions.create({
         model: AI_CONFIG.groq.model,
-
         messages: [
           {
             role: "user",

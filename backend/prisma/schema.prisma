@@ -23,14 +23,17 @@ model User {
 }
 
 model Conversation {
-  id        String    @id @default(uuid())
-  title     String
-  createdAt DateTime  @default(now())
+  id         String    @id @default(uuid())
+  title      String
+  createdAt  DateTime  @default(now())
 
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
 
-  messages  Message[]
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id])
+
+  messages   Message[]
 }
 
 model Message {
@@ -91,5 +94,7 @@ model Document {
   createdAt DateTime @default(now())
 
   userId    String
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id])
+
+  conversations Conversation[]
 }
