@@ -14,6 +14,7 @@ async function coordinatorAgent(
   documentContext = "",
   webContext = "",
   toolContext = "",
+  settings = {},
 ) {
   try {
     // ========================================
@@ -66,7 +67,7 @@ Use memories when relevant.
             content: userMessage,
           },
         ],
-        temperature: 0.7,
+        temperature: settings.temperature ?? 0.7,
         max_tokens: 1024,
       });
 
@@ -90,7 +91,7 @@ Use memories when relevant.
             content: userMessage,
           },
         ],
-        temperature: 0.7,
+        temperature: settings.temperature ?? 0.7,
         max_tokens: 1024,
       });
 

@@ -6,6 +6,7 @@ const webSearch = require("../agents/websearch.agent");
 const searchMemories = require("../agents/memory-search.agent");
 const chooseTool = require("../agents/tool-router.agent");
 const executeTool = require("../agents/tools.agent");
+const runChain = require("../agents/chain.agent");
 
 // ======================================
 // CREATE CONVERSATION
@@ -130,7 +131,7 @@ async function sendMessage(req, res) {
     // ======================================
 
     try {
-      if (shouldSaveMemory(message)) {
+      if (settings.autoMemorySave && shouldSaveMemory(message)) {
         await prisma.memory.create({
           data: {
             content: message,
@@ -156,7 +157,7 @@ async function sendMessage(req, res) {
         orderBy: {
           createdAt: "desc",
         },
-        take: 20,
+        take: settings.maxContext,
       });
 
       memoryContext = await searchMemories(req.user.id, message);
@@ -200,7 +201,7 @@ async function sendMessage(req, res) {
     // AUTO SKILL ROUTER
     // ======================================
 
-    if (!skillId) {
+    if (settings.autoSkillRouting && !skillId) {
       selectedSkill = await routeSkill(req.user.id, message);
 
       if (selectedSkill) {
@@ -288,17 +289,25 @@ async function sendMessage(req, res) {
     // AI RESPONSE
     // ======================================
 
-    let aiReply = "";
+    let aiReply;
 
     try {
-      aiReply = await coordinatorAgent(
-        message,
-        skillPrompt,
-        memoryContext,
-        documentContext,
-        webContext,
-        toolContext,
-      );
+      if (
+        message.toLowerCase().includes("research") ||
+        message.toLowerCase().includes("analyze")
+      ) {
+        aiReply = await runChain(message);
+      } else {
+        aiReply = await coordinatorAgent(
+          message,
+          skillPrompt,
+          memoryContext,
+          documentContext,
+          webContext,
+          toolContext,
+          settings,
+        );
+      }
     } catch (aiError) {
       console.error("AI Error:", aiError);
 
@@ -317,6 +326,27 @@ async function sendMessage(req, res) {
         conversationId,
       },
     });
+
+    // ======================================
+    // LOAD USER SETTINGS
+    // ======================================
+
+    let settings = await prisma.setting.findUnique({
+      where: {
+        userId: req.user.id,
+      },
+    });
+
+    if (!settings) {
+      settings = {
+        defaultProvider: "openrouter",
+        autoMemorySave: true,
+        autoSkillRouting: true,
+        webSearchDefault: false,
+        temperature: 0.7,
+        maxContext: 20,
+      };
+    }
 
     // ======================================
     // RESPONSE

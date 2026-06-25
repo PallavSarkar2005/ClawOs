@@ -20,6 +20,7 @@ model User {
   skills        Skill[]
   workflows Workflow[]
   documents     Document[]
+  settings Setting?
 }
 
 model Conversation {
@@ -97,4 +98,27 @@ model Document {
   user      User @relation(fields: [userId], references: [id])
 
   conversations Conversation[]
+}
+
+model Setting {
+  id               String   @id @default(cuid())
+
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+
+  defaultProvider  String   @default("openrouter")
+
+  autoMemorySave   Boolean  @default(true)
+
+  autoSkillRouting Boolean  @default(true)
+
+  webSearchDefault Boolean  @default(false)
+
+  temperature      Float    @default(0.7)
+
+  maxContext       Int      @default(20)
+
+  createdAt        DateTime @default(now())
+
+  updatedAt        DateTime @updatedAt
 }

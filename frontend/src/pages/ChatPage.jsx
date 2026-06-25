@@ -14,6 +14,7 @@ import {
 import { getWorkflows } from "../api/workflowApi";
 import { setProvider } from "../api/aiApi";
 import { getDocuments } from "../api/documentApi";
+import { getSettings } from "../api/settingsApi";
 
 function ChatPage() {
   // ==================================================
@@ -33,6 +34,7 @@ function ChatPage() {
   const [selectedWorkflow, setSelectedWorkflow] = useState("");
   const [documents, setDocuments] = useState([]);
   const [selectedDocument, setSelectedDocument] = useState("");
+  const [settings, setSettings] = useState(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // ==================================================
@@ -45,6 +47,28 @@ function ChatPage() {
     messagesEndRef.current?.scrollIntoView({
       behavior: "smooth",
     });
+  };
+
+  // ==================================================
+  // LOAD SETTINGS
+  // ==================================================
+
+  const loadSettings = async () => {
+    try {
+      const data = await getSettings();
+      setSettings(data);
+
+      if (data?.defaultProvider) {
+        setProviderState(data.defaultProvider);
+        await setProvider(data.defaultProvider);
+      }
+
+      if (data?.webSearchDefault !== undefined) {
+        setWebSearchEnabled(data.webSearchDefault);
+      }
+    } catch (error) {
+      console.error("Load settings error:", error);
+    }
   };
 
   // ==================================================
@@ -142,7 +166,7 @@ function ChatPage() {
   };
 
   // ==================================================
-  // Load Documents
+  // LOAD DOCUMENTS
   // ==================================================
 
   const loadDocuments = async () => {
@@ -247,6 +271,7 @@ function ChatPage() {
   // ==================================================
 
   useEffect(() => {
+    loadSettings();
     loadConversations();
     loadSkills();
     loadWorkflows();
