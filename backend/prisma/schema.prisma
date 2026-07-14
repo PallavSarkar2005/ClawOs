@@ -8,19 +8,34 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  name          String
-  email         String         @unique
-  password      String?
-  githubId      String?
-  createdAt     DateTime       @default(now())
+  id                     String         @id @default(uuid())
+  name                   String
+  email                  String         @unique
+  username               String?        @unique
+  passwordHash           String?
+  githubId               String?
+  avatar                 String?
+  emailVerified          Boolean        @default(false)
+  emailVerificationToken String?        @unique
+  passwordResetToken     String?        @unique
+  passwordResetExpires   DateTime?
+  role                   String         @default("user")
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  lastLogin              DateTime?
+  lastPasswordChange     DateTime?
+  isActive               Boolean        @default(true)
 
-  conversations Conversation[]
-  memories      Memory[]
-  skills        Skill[]
-  workflows Workflow[]
-  documents     Document[]
-  settings Setting?
+  conversations          Conversation[]
+  memories               Memory[]
+  skills                 Skill[]
+  workflows              Workflow[]
+  documents              Document[]
+  settings               Setting?
+  refreshTokens          RefreshToken[]
+  sessions               Session[]
+  projects               Project[]
+  integrations           Integration[]
 }
 
 model Conversation {
@@ -104,21 +119,195 @@ model Setting {
   id               String   @id @default(cuid())
 
   userId           String   @unique
-  user             User     @relation(fields: [userId], references: [id])
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   defaultProvider  String   @default("openrouter")
+  defaultModel     String   @default("meta-llama/llama-3.3-70b-instruct")
 
   autoMemorySave   Boolean  @default(true)
-
   autoSkillRouting Boolean  @default(true)
-
   webSearchDefault Boolean  @default(false)
+  streamingEnabled Boolean  @default(true)
 
   temperature      Float    @default(0.7)
-
   maxContext       Int      @default(20)
+  maxTokens        Int      @default(4096)
+
+  appearance       Json     @default("{\"theme\":\"dark\",\"accentColor\":\"#F15B42\",\"layout\":\"comfortable\",\"sidebarCollapsed\":false,\"fontSize\":\"medium\"}")
+  notifications    Json     @default("{\"emailNotifications\":true,\"aiTaskNotifications\":true,\"workflowCompletion\":true,\"securityAlerts\":true,\"marketingEmails\":false}")
 
   createdAt        DateTime @default(now())
-
   updatedAt        DateTime @updatedAt
+}
+
+model Integration {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        String
+  apiKeyEncrypted String
+  keyHint         String
+  status          String    @default("connected")
+  lastTestedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent  String?
+  ipAddress  String?
+  browser    String?
+  os         String?
+  device     String?  @default("desktop")
+  location   String?
+  lastActive DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model Project {
+  id           String            @id @default(uuid())
+  name         String
+  description  String?
+  framework    String            @default("react")
+  status       String            @default("idle")
+  isFavorite   Boolean           @default(false)
+  sortOrder    Int               @default(0)
+  lastOpenedAt DateTime?
+  layout       Json?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files        ProjectFile[]
+  logs         ProjectLog[]
+  executions   AiExecution[]
+  diffs        ProjectDiff[]
+  terminals    TerminalSession[]
+  runs         CodeRun[]
+  editorTabs   EditorTab[]
+}
+
+model TerminalSession {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String   @default("bash")
+  cwd       String?
+  cols      Int      @default(80)
+  rows      Int      @default(24)
+  history   Json     @default("[]")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model CodeRun {
+  id         String   @id @default(uuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  command    String
+  status     String   @default("running")
+  exitCode   Int?
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+  output     String   @default("")
+  projectType String?
+
+  @@index([projectId])
+}
+
+model EditorTab {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileId    String
+  isActive  Boolean  @default(false)
+  viewGroup String   @default("main")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@unique([projectId, fileId, viewGroup])
+}
+
+model ProjectFile {
+  id        String        @id @default(uuid())
+  name      String
+  path      String
+  content   String        @default("")
+  isFolder  Boolean       @default(false)
+  parentId  String?
+  parent    ProjectFile?  @relation("FileTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  ProjectFile[] @relation("FileTree")
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([projectId])
+  @@index([parentId])
+}
+
+model ProjectLog {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  level     String   @default("info")
+  source    String   @default("system")
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model AiExecution {
+  id           String   @id @default(uuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status       String   @default("running")
+  currentStage String?
+  stages       Json     @default("[]")
+  summary      String?
+  tokensUsed   Int      @default(0)
+  promptTokens Int      @default(0)
+  completionTokens Int  @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model ProjectDiff {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileId    String?
+  filePath  String
+  before    String   @default("")
+  after     String   @default("")
+  status    String   @default("pending")
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
 }

@@ -1,27 +1,72 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import LandingPage from "../pages/LandingPage";
 import LoginPage from "../pages/LoginPage";
-import SignupPage from "../pages/SignupPage";
+import RegisterPage from "../pages/RegisterPage";
+import ForgotPasswordPage from "../pages/ForgotPasswordPage";
+import ResetPasswordPage from "../pages/ResetPasswordPage";
+import VerifyEmailPage from "../pages/VerifyEmailPage";
+
 import DashboardPage from "../pages/DashboardPage";
 import ChatPage from "../pages/ChatPage";
 import MemoryPage from "../pages/MemoryPage";
 import WorkflowsPage from "../pages/WorkflowsPage";
 import SettingsPage from "../pages/SettingsPage";
 import SkillsPage from "../pages/SkillsPage";
-import ProtectedRoute from "./ProtectedRoute";
 import DocumentsPage from "../pages/DocumentsPage";
+import ProjectsPage from "../pages/ProjectsPage";
+
+import { ProtectedRoute, PublicRoute } from "./ProtectedRoute";
 
 function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Routes */}
+        {/* Landing Page */}
         <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
 
-        {/* Protected Routes */}
+        {/* Public-Only Auth Routes */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <RegisterPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/signup"
+          element={<Navigate to="/register" replace />}
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <PublicRoute>
+              <ForgotPasswordPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/reset-password/:token"
+          element={
+            <PublicRoute>
+              <ResetPasswordPage />
+            </PublicRoute>
+          }
+        />
+
+        {/* Verification Route (Publicly Accessible Link) */}
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+
+        {/* Protected Core App Routes */}
         <Route
           path="/dashboard"
           element={
@@ -67,11 +112,30 @@ function AppRoutes() {
           }
         />
 
+        {/* Account points to Settings (Account Center) */}
+        <Route
+          path="/account"
+          element={
+            <ProtectedRoute>
+              <SettingsPage defaultTab="profile" />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/documents"
           element={
             <ProtectedRoute>
               <DocumentsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/projects"
+          element={
+            <ProtectedRoute>
+              <ProjectsPage />
             </ProtectedRoute>
           }
         />
@@ -84,6 +148,9 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

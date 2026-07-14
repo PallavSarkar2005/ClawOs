@@ -78,6 +78,27 @@ async function sendMessage(req, res) {
     }
 
     // ======================================
+    // LOAD USER SETTINGS
+    // ======================================
+
+    let settings = await prisma.setting.findUnique({
+      where: {
+        userId: req.user.id,
+      },
+    });
+
+    if (!settings) {
+      settings = {
+        defaultProvider: "openrouter",
+        autoMemorySave: true,
+        autoSkillRouting: true,
+        webSearchDefault: false,
+        temperature: 0.7,
+        maxContext: 20,
+      };
+    }
+
+    // ======================================
     // LOAD CONVERSATION
     // ======================================
 
@@ -327,26 +348,7 @@ async function sendMessage(req, res) {
       },
     });
 
-    // ======================================
-    // LOAD USER SETTINGS
-    // ======================================
 
-    let settings = await prisma.setting.findUnique({
-      where: {
-        userId: req.user.id,
-      },
-    });
-
-    if (!settings) {
-      settings = {
-        defaultProvider: "openrouter",
-        autoMemorySave: true,
-        autoSkillRouting: true,
-        webSearchDefault: false,
-        temperature: 0.7,
-        maxContext: 20,
-      };
-    }
 
     // ======================================
     // RESPONSE

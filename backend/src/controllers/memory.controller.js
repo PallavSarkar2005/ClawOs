@@ -56,21 +56,29 @@ async function createMemory(req, res) {
 
 async function deleteMemory(req, res) {
   try {
-    await prisma.memory.delete({
-      where: {
-        id: req.params.id,
-      },
+    const memory = await prisma.memory.findFirst({
+      where: { id: req.params.id, userId: req.user.id },
     });
+    if (!memory) {
+      return res.status(404).json({ message: "Memory not found" });
+    }
 
-    res.json({
-      success: true,
-    });
+    await prisma.memory.delete({ where: { id: memory.id } });
+
+    res.json({ success: true });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ message: "Server Error" });
+  }
+}
 
-    res.status(500).json({
-      message: "Server Error",
-    });
+async function deleteAllMemories(req, res) {
+  try {
+    const result = await prisma.memory.deleteMany({ where: { userId: req.user.id } });
+    res.json({ success: true, deleted: result.count });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server Error" });
   }
 }
 
@@ -78,4 +86,5 @@ module.exports = {
   getMemories,
   createMemory,
   deleteMemory,
+  deleteAllMemories,
 };

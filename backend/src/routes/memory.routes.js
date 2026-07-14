@@ -8,11 +8,14 @@ const {
   getMemories,
   createMemory,
   deleteMemory,
+  deleteAllMemories,
 } = require("../controllers/memory.controller");
 
 router.get("/", protect, getMemories);
 
 router.post("/", protect, createMemory);
+
+router.delete("/", protect, deleteAllMemories);
 
 router.delete("/:id", protect, deleteMemory);
 

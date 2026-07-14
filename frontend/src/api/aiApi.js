@@ -1,8 +1,4 @@
-import axios from "axios";
-
-const API = axios.create({
-  baseURL: "http://localhost:5000/api",
-});
+import API from "./chatApi";
 
 export const getModels = async () => {
   const res = await API.get("/ai/models");
