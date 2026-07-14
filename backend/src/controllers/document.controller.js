@@ -1,142 +1,46 @@
-const prisma = require("../database/prisma");
-
-const fs = require("fs");
-
-const pdf = require("pdf-parse");
-
-const mammoth = require("mammoth");
-
-// =====================================
-// UPLOAD DOCUMENT
-// =====================================
+const {
+  documentService,
+} = require("../memory");
+const uploadDocumentMw = require("../middleware/upload-document.middleware");
 
 async function uploadDocument(req, res) {
   try {
-    const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({
-        message: "No file uploaded",
-      });
-    }
-
-    let content = "";
-
-    // =====================================
-    // PDF
-    // =====================================
-
-    if (file.mimetype === "application/pdf") {
-      const buffer = fs.readFileSync(file.path);
-
-      const data = await pdf(buffer);
-
-      content = data.text;
-    }
-
-    // =====================================
-    // DOCX
-    // =====================================
-    else if (
-      file.mimetype ===
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-      file.mimetype.includes("word")
-    ) {
-      const result = await mammoth.extractRawText({
-        path: file.path,
-      });
-
-      content = result.value;
-    }
-
-    // =====================================
-    // TXT
-    // =====================================
-    else if (file.mimetype === "text/plain") {
-      content = fs.readFileSync(file.path, "utf8");
-    }
-
-    // =====================================
-    // SAVE TO DATABASE
-    // =====================================
-
-    const document = await prisma.document.create({
-      data: {
-        name: file.originalname,
-        path: file.path,
-        content,
-        userId: req.user.id,
-      },
+    const result = await documentService.upload(req.user.id, req.file, {
+      projectId: req.body.projectId,
+      workspaceId: req.body.workspaceId,
     });
-
-    // =====================================
-    // OPTIONAL:
-    // DELETE PHYSICAL FILE AFTER EXTRACTING
-    // =====================================
-
-    try {
-      fs.unlinkSync(file.path);
-    } catch (err) {
-      console.log("Could not delete file:", err.message);
-    }
-
-    res.status(201).json(document);
+    res.status(201).json(result.document);
   } catch (error) {
     console.error("Document Upload Error:", error);
-
-    res.status(500).json({
-      message: "Upload failed",
-      error: error.message,
+    res.status(error.status || 500).json({
+      message: error.message || "Upload failed",
     });
   }
 }
-
-// =====================================
-// GET DOCUMENTS
-// =====================================
 
 async function getDocuments(req, res) {
   try {
-    const documents = await prisma.document.findMany({
-      where: {
-        userId: req.user.id,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+    const result = await documentService.list(req.user.id, {
+      q: req.query.q,
+      status: req.query.status,
+      skip: req.query.skip,
+      take: req.query.take || 100,
     });
-
-    res.json(documents);
+    res.json(result.items);
   } catch (error) {
     console.error(error);
-
-    res.status(500).json({
-      message: "Server Error",
-    });
+    res.status(500).json({ message: "Server Error" });
   }
 }
 
-// =====================================
-// DELETE DOCUMENT
-// =====================================
-
 async function deleteDocument(req, res) {
   try {
-    await prisma.document.delete({
-      where: {
-        id: req.params.id,
-      },
-    });
-
-    res.json({
-      success: true,
-    });
+    const doc = await documentService.remove(req.user.id, req.params.id);
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+    res.json({ success: true });
   } catch (error) {
     console.error(error);
-
-    res.status(500).json({
-      message: "Delete Failed",
-    });
+    res.status(500).json({ message: "Delete Failed" });
   }
 }
 
@@ -144,4 +48,5 @@ module.exports = {
   uploadDocument,
   getDocuments,
   deleteDocument,
+  uploadDocumentMw,
 };

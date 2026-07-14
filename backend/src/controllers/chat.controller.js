@@ -4,6 +4,7 @@ const shouldSaveMemory = require("../agents/memory.agent");
 const routeSkill = require("../agents/router.agent");
 const webSearch = require("../agents/websearch.agent");
 const searchMemories = require("../agents/memory-search.agent");
+const { memoryService, contextBuilder, citationEngine } = require("../memory");
 const chooseTool = require("../agents/tool-router.agent");
 const executeTool = require("../agents/tools.agent");
 const runChain = require("../agents/chain.agent");
@@ -153,11 +154,13 @@ async function sendMessage(req, res) {
 
     try {
       if (settings.autoMemorySave && shouldSaveMemory(message)) {
-        await prisma.memory.create({
-          data: {
-            content: message,
-            userId: req.user.id,
-          },
+        await memoryService.create(req.user.id, {
+          content: message,
+          scope: "CONVERSATION",
+          conversationId,
+          source: "auto-save",
+          importance: 0.55,
+          tags: ["conversation", "auto"],
         });
       }
     } catch (memoryError) {
@@ -165,25 +168,28 @@ async function sendMessage(req, res) {
     }
 
     // ======================================
-    // LOAD MEMORY CONTEXT
+    // LOAD MEMORY CONTEXT (RAG Context Builder)
     // ======================================
 
     let memoryContext = "";
+    let ragCitations = [];
 
     try {
-      const memories = await prisma.memory.findMany({
-        where: {
-          userId: req.user.id,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-        take: settings.maxContext,
+      const built = await contextBuilder.build(req.user.id, message, {
+        tokenBudget: Math.max(1500, (settings.maxContext || 20) * 120),
+        conversationId,
+        documentId: documentId || null,
+        topK: settings.maxContext || 12,
       });
-
-      memoryContext = await searchMemories(req.user.id, message);
+      memoryContext = built.context || (await searchMemories(req.user.id, message));
+      ragCitations = built.citations || [];
     } catch (memoryError) {
       console.error("Memory Load Error:", memoryError);
+      try {
+        memoryContext = await searchMemories(req.user.id, message);
+      } catch {
+        memoryContext = "";
+      }
     }
 
     // ======================================
@@ -340,11 +346,15 @@ async function sendMessage(req, res) {
     // SAVE AI MESSAGE
     // ======================================
 
+    const annotated = citationEngine.annotateAnswer(aiReply, ragCitations);
+    aiReply = annotated.answer;
+
     await prisma.message.create({
       data: {
         role: "assistant",
         content: aiReply,
         conversationId,
+        citations: annotated.citations?.length ? annotated.citations : undefined,
       },
     });
 
@@ -357,9 +367,8 @@ async function sendMessage(req, res) {
     return res.json({
       success: true,
       reply: aiReply,
-
+      citations: annotated.citations || [],
       skill: selectedSkill?.name || null,
-
       workflow: selectedWorkflow?.name || null,
     });
   } catch (error) {

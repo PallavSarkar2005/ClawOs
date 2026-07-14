@@ -8,7 +8,7 @@ class DashboardController {
       const [docsCount, conversationsCount, memoriesCount, skillsCount, projectsCount] = await Promise.all([
         prisma.document.count({ where: { userId } }),
         prisma.conversation.count({ where: { userId } }),
-        prisma.memory.count({ where: { userId } }),
+        prisma.memory.count({ where: { ownerId: userId, deletedAt: null } }),
         prisma.skill.count({ where: { userId } }),
         prisma.project.count({ where: { userId } }),
       ]);
@@ -58,7 +58,7 @@ class DashboardController {
           take: 3,
         }),
         prisma.memory.findMany({
-          where: { userId },
+          where: { ownerId: userId, deletedAt: null },
           orderBy: { createdAt: "desc" },
           take: 3,
         }),

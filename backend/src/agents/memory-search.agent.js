@@ -1,23 +1,18 @@
-const prisma = require("../database/prisma");
+const { retrievalEngine } = require("../memory");
 
 async function searchMemories(userId, message) {
-  const memories = await prisma.memory.findMany({
-    where: {
-      userId,
-    },
-    take: 50,
-  });
-
-  const words = message.toLowerCase().split(" ");
-
-  const relevant = memories.filter((memory) =>
-    words.some((word) => memory.content.toLowerCase().includes(word)),
-  );
-
-  return relevant
-    .slice(0, 10)
-    .map((m) => m.content)
-    .join("\n");
+  try {
+    const result = await retrievalEngine.hybridSearch(userId, message, {
+      topK: 10,
+      includeChunks: false,
+      includeMemories: true,
+      useMmr: true,
+    });
+    return (result.results || []).map((m) => m.content).join("\n");
+  } catch (err) {
+    console.error("[memory-search]", err.message);
+    return "";
+  }
 }
 
 module.exports = searchMemories;

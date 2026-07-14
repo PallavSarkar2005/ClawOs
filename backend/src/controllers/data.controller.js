@@ -29,7 +29,7 @@ async function exportAccountData(req, res) {
           where: { userId },
           include: { messages: { orderBy: { createdAt: "asc" } } },
         }),
-        prisma.memory.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
+        prisma.memory.findMany({ where: { ownerId: userId, deletedAt: null }, orderBy: { createdAt: "desc" } }),
         prisma.skill.findMany({ where: { userId } }),
         prisma.workflow.findMany({ where: { userId } }),
         prisma.document.findMany({
@@ -92,7 +92,7 @@ async function downloadConversations(req, res) {
 async function exportMemories(req, res) {
   try {
     const memories = await prisma.memory.findMany({
-      where: { userId: req.user.id },
+      where: { ownerId: req.user.id, deletedAt: null },
       orderBy: { createdAt: "desc" },
     });
     res.json({
@@ -107,7 +107,10 @@ async function exportMemories(req, res) {
 
 async function deleteAllMemories(req, res) {
   try {
-    const result = await prisma.memory.deleteMany({ where: { userId: req.user.id } });
+    const result = await prisma.memory.updateMany({
+      where: { ownerId: req.user.id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
     res.json({ success: true, deleted: result.count });
   } catch (error) {
     console.error(error);

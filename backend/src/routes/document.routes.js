@@ -1,21 +1,15 @@
 const express = require("express");
-
 const router = express.Router();
-
 const protect = require("../middleware/auth.middleware");
-
-const upload = require("../middleware/upload.middleware");
-
+const uploadDocument = require("../middleware/upload-document.middleware");
 const {
-  uploadDocument,
+  uploadDocument: uploadHandler,
   getDocuments,
   deleteDocument,
 } = require("../controllers/document.controller");
 
-router.post("/upload", protect, upload.single("file"), uploadDocument);
-
+router.post("/upload", protect, uploadDocument.single("file"), uploadHandler);
 router.get("/", protect, getDocuments);
-
 router.delete("/:id", protect, deleteDocument);
 
 module.exports = router;

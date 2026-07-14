@@ -36,6 +36,9 @@ model User {
   sessions               Session[]
   projects               Project[]
   integrations           Integration[]
+  memoryCollections      MemoryCollection[]
+  indexJobs              IndexJob[]
+  memoryAccessLogs       MemoryAccessLog[]
 }
 
 model Conversation {
@@ -50,6 +53,7 @@ model Conversation {
   document   Document? @relation(fields: [documentId], references: [id])
 
   messages   Message[]
+  memories   Memory[]
 }
 
 model Message {
@@ -57,18 +61,138 @@ model Message {
   role           String
   content        String
   createdAt      DateTime     @default(now())
+  citations      Json?
 
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
 
 model Memory {
+  id             String    @id @default(uuid())
+  content        String
+  ownerId        String
+  scope          String    @default("USER")
+  importance     Float     @default(0.5)
+  pinned         Boolean   @default(false)
+  confidence     Float     @default(1.0)
+  frequency      Int       @default(0)
+  decay          Float     @default(0.0)
+  source         String?
+  tags           String[]  @default([])
+  metadata       Json      @default("{}")
+  relationships  Json      @default("[]")
+  embedding      Json?
+  embeddingModel String?
+  embeddingDim   Int?
+  contentHash    String?
+  version        Int       @default(1)
+  score          Float     @default(0.5)
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastAccessed   DateTime  @default(now())
+
+  projectId      String?
+  conversationId String?
+  agentType      String?
+  workflowId     String?
+  documentId     String?
+  workspaceId    String?
+  collectionId   String?
+
+  owner          User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  document       Document?     @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  collection     MemoryCollection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+
+  versions       MemoryVersion[]
+  graphFrom      MemoryEdge[]  @relation("EdgeFrom")
+  graphTo        MemoryEdge[]  @relation("EdgeTo")
+  accessLogs     MemoryAccessLog[]
+
+  @@index([ownerId, scope])
+  @@index([ownerId, deletedAt])
+  @@index([ownerId, pinned])
+  @@index([ownerId, lastAccessed])
+  @@index([projectId])
+  @@index([documentId])
+  @@index([contentHash])
+  @@index([agentType])
+}
+
+model MemoryVersion {
   id        String   @id @default(uuid())
+  memoryId  String
+  memory    Memory   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
   content   String
+  version   Int
+  metadata  Json     @default("{}")
   createdAt DateTime @default(now())
 
-  userId    String
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([memoryId])
+  @@unique([memoryId, version])
+}
+
+model MemoryEdge {
+  id         String   @id @default(uuid())
+  fromId     String
+  toId       String
+  type       String
+  weight     Float    @default(1.0)
+  metadata   Json     @default("{}")
+  ownerId    String
+  createdAt  DateTime @default(now())
+
+  from       Memory   @relation("EdgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to         Memory   @relation("EdgeTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@index([fromId])
+  @@index([toId])
+  @@index([ownerId])
+  @@unique([fromId, toId, type])
+}
+
+model MemoryCollection {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  color       String?
+  isShared    Boolean  @default(false)
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  memories    Memory[]
+  items       MemoryCollectionItem[]
+
+  @@index([ownerId])
+}
+
+model MemoryCollectionItem {
+  id           String           @id @default(uuid())
+  collectionId String
+  memoryId     String
+  collection   MemoryCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime         @default(now())
+
+  @@unique([collectionId, memoryId])
+  @@index([memoryId])
+}
+
+model MemoryAccessLog {
+  id        String   @id @default(uuid())
+  memoryId  String?
+  ownerId   String
+  action    String
+  query     String?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  memory    Memory?  @relation(fields: [memoryId], references: [id], onDelete: SetNull)
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
+  @@index([memoryId])
 }
 
 model Skill {
@@ -102,17 +226,94 @@ model Workflow {
 }
 
 model Document {
-  id        String   @id @default(uuid())
-  name      String
-  path      String
-  content   String
+  id             String   @id @default(uuid())
+  name           String
+  path           String
+  content        String   @default("")
+  mimeType       String?
+  fileType       String?
+  fileSize       Int      @default(0)
+  status         String   @default("pending")
+  indexProgress  Float    @default(0)
+  indexError     String?
+  pageCount      Int?
+  tokenCount     Int      @default(0)
+  chunkCount     Int      @default(0)
+  contentHash    String?
+  metadata       Json     @default("{}")
+  version        Int      @default(1)
+  deletedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  createdAt DateTime @default(now())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String?
+  workspaceId    String?
 
-  userId    String
-  user      User @relation(fields: [userId], references: [id])
+  conversations  Conversation[]
+  chunks         DocumentChunk[]
+  memories       Memory[]
+  indexJobs      IndexJob[]
 
-  conversations Conversation[]
+  @@index([userId, deletedAt])
+  @@index([userId, status])
+  @@index([contentHash])
+}
+
+model DocumentChunk {
+  id             String   @id @default(uuid())
+  documentId     String
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content        String
+  chunkIndex     Int
+  tokenCount     Int      @default(0)
+  contentHash    String?
+  embedding      Json?
+  embeddingModel String?
+  embeddingDim   Int?
+  pageStart      Int?
+  pageEnd        Int?
+  lineStart      Int?
+  lineEnd        Int?
+  heading        String?
+  chunkType      String   @default("semantic")
+  metadata       Json     @default("{}")
+  parentChunkId  String?
+  version        Int      @default(1)
+  deletedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([documentId, chunkIndex])
+  @@index([documentId, deletedAt])
+  @@index([contentHash])
+  @@unique([documentId, chunkIndex, version])
+}
+
+model IndexJob {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId  String?
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  type        String    @default("index")
+  status      String    @default("queued")
+  progress    Float     @default(0)
+  stage       String?
+  error       String?
+  retries     Int       @default(0)
+  maxRetries  Int       @default(3)
+  payload     Json      @default("{}")
+  result      Json?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([documentId])
 }
 
 model Setting {
@@ -132,6 +333,9 @@ model Setting {
   temperature      Float    @default(0.7)
   maxContext       Int      @default(20)
   maxTokens        Int      @default(4096)
+
+  embeddingProvider String  @default("openrouter")
+  embeddingModel    String  @default("openai/text-embedding-3-small")
 
   appearance       Json     @default("{\"theme\":\"dark\",\"accentColor\":\"#F15B42\",\"layout\":\"comfortable\",\"sidebarCollapsed\":false,\"fontSize\":\"medium\"}")
   notifications    Json     @default("{\"emailNotifications\":true,\"aiTaskNotifications\":true,\"workflowCompletion\":true,\"securityAlerts\":true,\"marketingEmails\":false}")
