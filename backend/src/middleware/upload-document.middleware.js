@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
@@ -13,13 +14,34 @@ const ALLOWED_EXT = new Set([
   "png", "jpg", "jpeg", "webp", "gif", "bmp",
 ]);
 
+const BLOCKED_EXT = new Set([
+  "exe", "bat", "cmd", "com", "msi", "scr", "ps1", "sh", "bash",
+  "dll", "so", "dylib", "bin", "app", "dmg", "php", "asp", "aspx", "cgi",
+]);
+
+const ALLOWED_MIME_PREFIXES = ["text/", "image/", "application/pdf", "application/json"];
+const ALLOWED_MIME_EXACT = new Set([
+  "application/pdf",
+  "application/json",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/octet-stream",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "text/javascript",
+  "application/javascript",
+  "application/typescript",
+]);
+
 const storage = multer.diskStorage({
   destination(req, file, cb) {
     cb(null, uploadDir);
   },
   filename(req, file, cb) {
-    const safe = String(file.originalname || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
-    cb(null, `${Date.now()}-${safe}`);
+    const ext = path.extname(file.originalname || "").replace(".", "").toLowerCase();
+    const safeExt = ALLOWED_EXT.has(ext) ? `.${ext}` : ".bin";
+    cb(null, `${crypto.randomBytes(16).toString("hex")}${safeExt}`);
   },
 });
 
@@ -28,10 +50,28 @@ const uploadDocument = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter(req, file, cb) {
     const ext = path.extname(file.originalname || "").replace(".", "").toLowerCase();
-    if (ALLOWED_EXT.has(ext) || file.mimetype?.startsWith("text/") || file.mimetype?.startsWith("image/")) {
-      return cb(null, true);
+    const name = String(file.originalname || "");
+
+    if (BLOCKED_EXT.has(ext) || /\.(exe|bat|cmd|sh|ps1|dll)$/i.test(name)) {
+      return cb(new Error("Executable uploads are not allowed"));
     }
-    return cb(new Error(`Unsupported file type: .${ext || file.mimetype}`));
+    if (name.includes("..") || name.includes("/") || name.includes("\\")) {
+      return cb(new Error("Invalid filename"));
+    }
+    if (!ALLOWED_EXT.has(ext)) {
+      return cb(new Error(`Unsupported file type: .${ext || "unknown"}`));
+    }
+
+    const mime = file.mimetype || "";
+    const mimeOk =
+      ALLOWED_MIME_EXACT.has(mime) ||
+      ALLOWED_MIME_PREFIXES.some((p) => mime.startsWith(p));
+
+    if (!mimeOk && mime !== "application/octet-stream") {
+      return cb(new Error(`Unsupported MIME type: ${mime || "unknown"}`));
+    }
+
+    return cb(null, true);
   },
 });
 

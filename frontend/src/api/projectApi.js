@@ -124,18 +124,17 @@ export const gitPull = (projectId, data = {}) =>
   api.post(`/projects/${projectId}/git/pull`, data).then((r) => r.data);
 
 export function getTerminalWsUrl(projectId, sessionId, cols = 80, rows = 24) {
-  const token = localStorage.getItem("accessToken");
   const base = (api.defaults.baseURL || "http://localhost:5000/api").replace(
     /\/api\/?$/,
-    ""
+    "",
   );
   const wsBase = base.replace(/^http/, "ws");
   const params = new URLSearchParams({
-    token: token || "",
     projectId,
     cols: String(cols),
     rows: String(rows),
   });
   if (sessionId) params.set("sessionId", sessionId);
+  // Auth via HttpOnly cookies on the WS upgrade — never put tokens in the query string
   return `${wsBase}/ws/terminal?${params.toString()}`;
 }

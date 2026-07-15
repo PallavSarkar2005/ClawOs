@@ -76,11 +76,7 @@ export async function revokeSession(sessionId) {
 }
 
 export async function revokeAllOtherSessions() {
-  const refreshToken = localStorage.getItem("refreshToken");
-  const response = await api.delete("/auth/sessions", {
-    data: { refreshToken },
-    headers: refreshToken ? { "x-refresh-token": refreshToken } : undefined,
-  });
+  const response = await api.delete("/auth/sessions");
   return response.data;
 }
 

@@ -8,7 +8,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState([]);
 
-  // Toast Helper
   const showToast = useCallback((message, type = "success") => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -29,11 +28,7 @@ export function AuthProvider({ children }) {
         rememberMe,
       });
 
-      const { accessToken, refreshToken, user: loggedUser } = response.data;
-
-      localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("refreshToken", refreshToken);
-
+      const { user: loggedUser } = response.data;
       setUser(loggedUser);
       showToast("Access granted. Initializing session...", "success");
       return loggedUser;
@@ -64,13 +59,10 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      const token = localStorage.getItem("refreshToken");
-      await api.post("/auth/logout", { refreshToken: token });
+      await api.post("/auth/logout");
     } catch (error) {
-      console.warn("Logout request failed, cleaning local state anyway", error);
+      console.warn("Logout request failed, cleaning local state anyway");
     } finally {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
       setUser(null);
       showToast("Core session terminated.", "info");
     }
@@ -154,8 +146,6 @@ export function AuthProvider({ children }) {
   const deleteAccount = async (confirmText, password) => {
     try {
       await api.delete("/auth/account", { data: { confirmText, password } });
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
       setUser(null);
       showToast("Account deleted permanently.", "info");
     } catch (error) {
@@ -167,24 +157,15 @@ export function AuthProvider({ children }) {
 
   const fetchUser = useCallback(async () => {
     try {
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        setLoading(false);
-        return;
-      }
       const response = await api.get("/auth/me");
       setUser(response.data);
-    } catch (error) {
-      console.warn("Auto login check failed");
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
+    } catch {
       setUser(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Listen to JWT expiration notifications from Axios Interceptor
   useEffect(() => {
     const handleAuthExpired = () => {
       setUser(null);

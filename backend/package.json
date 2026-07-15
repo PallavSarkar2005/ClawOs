@@ -4,12 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test src/memory/__tests__/memory-engine.test.js",
+    "prestart": "node scripts/ensure-env.js",
+    "predev": "node scripts/ensure-env.js",
+    "test": "node --test src/memory/__tests__/memory-engine.test.js src/__tests__/security.test.js src/__tests__/auth-cookies.test.js src/__tests__/safe-exec.test.js src/__tests__/validation.test.js src/__tests__/runtime/*.test.js",
+    "test:runtime": "node --test src/__tests__/runtime/*.test.js",
+    "test:security": "node --test src/__tests__/*.test.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate deploy"
+    "db:migrate": "prisma migrate deploy",
+    "ensure-env": "node scripts/ensure-env.js"
   },
   "keywords": [],
   "author": "",

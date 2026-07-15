@@ -1,15 +1,15 @@
 const crypto = require("crypto");
+const { getEnv } = require("../config/env");
 
 const ALGORITHM = "aes-256-gcm";
-const KEY = crypto.scryptSync(
-  process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || "clawos_super_secret_key",
-  "clawos-integration-salt",
-  32,
-);
+
+function getKey() {
+  return crypto.scryptSync(getEnv().ENCRYPTION_KEY, "clawos-integration-salt", 32);
+}
 
 function encrypt(plainText) {
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
   const encrypted = Buffer.concat([cipher.update(String(plainText), "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
@@ -20,7 +20,7 @@ function decrypt(payload) {
   if (!ivHex || !tagHex || !dataHex) {
     throw new Error("Invalid encrypted payload");
   }
-  const decipher = crypto.createDecipheriv(ALGORITHM, KEY, Buffer.from(ivHex, "hex"));
+  const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), Buffer.from(ivHex, "hex"));
   decipher.setAuthTag(Buffer.from(tagHex, "hex"));
   const decrypted = Buffer.concat([
     decipher.update(Buffer.from(dataHex, "hex")),

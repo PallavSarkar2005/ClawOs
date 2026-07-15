@@ -7,6 +7,10 @@ ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "citations" JSONB;
 -- Drop old Memory and recreate with full schema (migrate data)
 ALTER TABLE "Memory" RENAME TO "Memory_old";
 
+ALTER TABLE "Memory_old"
+RENAME CONSTRAINT "Memory_pkey"
+TO "Memory_old_pkey";
+
 CREATE TABLE "Memory" (
     "id" TEXT NOT NULL,
     "content" TEXT NOT NULL,

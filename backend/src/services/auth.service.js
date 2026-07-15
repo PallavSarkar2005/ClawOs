@@ -45,9 +45,10 @@ class AuthService {
 
     await prisma.setting.create({ data: { userId: user.id } });
 
-    console.log(
-      `[AUTH SERVICE - EMAIL VERIFICATION LINK]: http://localhost:5173/verify-email?token=${verificationToken}`,
-    );
+    // Verification token issued; deliver via email service in production (never log secrets)
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AUTH] Email verification token issued for new user");
+    }
 
     return this._safeUser(user);
   }
@@ -223,9 +224,9 @@ class AuthService {
 
       const verificationToken = crypto.randomBytes(32).toString("hex");
       data.emailVerificationToken = verificationToken;
-      console.log(
-        `[AUTH SERVICE - EMAIL VERIFICATION LINK]: http://localhost:5173/verify-email?token=${verificationToken}`,
-      );
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[AUTH] Email verification token re-issued after email change");
+      }
     }
 
     if (avatarUrl) {
@@ -271,9 +272,9 @@ class AuthService {
       passwordResetExpires: resetExpires,
     });
 
-    console.log(
-      `[AUTH SERVICE - PASSWORD RESET LINK]: http://localhost:5173/reset-password/${resetToken}`,
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AUTH] Password reset token issued");
+    }
 
     return { success: true };
   }

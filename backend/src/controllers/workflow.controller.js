@@ -1,7 +1,5 @@
 const prisma = require("../database/prisma");
 
-// GET
-
 async function getWorkflows(req, res) {
   const workflows = await prisma.workflow.findMany({
     where: {
@@ -12,12 +10,14 @@ async function getWorkflows(req, res) {
   res.json(workflows);
 }
 
-// CREATE
-
 async function createWorkflow(req, res) {
+  const { name, description, prompt, enabled } = req.body;
   const workflow = await prisma.workflow.create({
     data: {
-      ...req.body,
+      name,
+      description: description || "",
+      prompt: prompt || "",
+      enabled,
       userId: req.user.id,
     },
   });
@@ -25,12 +25,21 @@ async function createWorkflow(req, res) {
   res.json(workflow);
 }
 
-// DELETE
-
 async function deleteWorkflow(req, res) {
-  await prisma.workflow.delete({
+  const existing = await prisma.workflow.findFirst({
     where: {
       id: req.params.id,
+      userId: req.user.id,
+    },
+  });
+
+  if (!existing) {
+    return res.status(404).json({ message: "Workflow not found" });
+  }
+
+  await prisma.workflow.delete({
+    where: {
+      id: existing.id,
     },
   });
 

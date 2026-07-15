@@ -1,30 +1,34 @@
 const jwtService = require("../services/jwt.service");
 const userRepository = require("../repositories/user.repository");
+const sessionRepository = require("../repositories/session.repository");
+const { getAccessTokenFromRequest } = require("../utils/cookies");
 
 async function protect(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
+    const token = getAccessTokenFromRequest(req);
 
-    if (!authHeader) {
+    if (!token) {
       return res.status(401).json({
         message: "No token provided",
       });
     }
 
-    const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({
-        message: "Malformed token",
-      });
-    }
-
     const decoded = jwtService.verifyAccessToken(token);
-    
+
     const user = await userRepository.findById(decoded.id);
     if (!user || !user.isActive) {
       return res.status(401).json({
         message: "User account is inactive or deleted",
       });
+    }
+
+    if (decoded.sessionId) {
+      const owned = await sessionRepository.findByIdAndUserId(decoded.sessionId, user.id);
+      if (!owned) {
+        return res.status(401).json({
+          message: "Session revoked or expired",
+        });
+      }
     }
 
     req.user = {

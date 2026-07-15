@@ -1,9 +1,5 @@
 const prisma = require("../database/prisma");
 
-// ==============================
-// GET ALL SKILLS
-// ==============================
-
 async function getSkills(req, res) {
   try {
     const skills = await prisma.skill.findMany({
@@ -25,10 +21,6 @@ async function getSkills(req, res) {
   }
 }
 
-// ==============================
-// CREATE SKILL
-// ==============================
-
 async function createSkill(req, res) {
   try {
     const {
@@ -40,7 +32,7 @@ async function createSkill(req, res) {
     const skill = await prisma.skill.create({
       data: {
         name,
-        description,
+        description: description || "",
         prompt,
         userId: req.user.id,
       },
@@ -56,15 +48,22 @@ async function createSkill(req, res) {
   }
 }
 
-// ==============================
-// DELETE SKILL
-// ==============================
-
 async function deleteSkill(req, res) {
   try {
-    await prisma.skill.delete({
+    const existing = await prisma.skill.findFirst({
       where: {
         id: req.params.id,
+        userId: req.user.id,
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: "Skill not found" });
+    }
+
+    await prisma.skill.delete({
+      where: {
+        id: existing.id,
       },
     });
 

@@ -1,10 +1,15 @@
 const express = require("express");
 const router = express.Router();
 
-const prisma = require("../database/prisma");
 const protect = require("../middleware/auth.middleware");
+const { chatLimiter } = require("../middleware/rate-limit.middleware");
+const { validate } = require("../middleware/validate.middleware");
+const {
+  sendMessageSchema,
+  idParam,
+  conversationIdParam,
+} = require("../validators/common.validator");
 
-const coordinatorAgent = require("../agents/coordinator.agent");
 const {
   createConversation,
   getConversations,
@@ -13,97 +18,28 @@ const {
   deleteConversation,
 } = require("../controllers/chat.controller");
 
-/*
-|--------------------------------------------------------------------------
-| Conversations
-|--------------------------------------------------------------------------
-*/
+router.post("/conversation", protect, chatLimiter, createConversation);
 
-router.post("/conversation", protect, createConversation);
+router.get("/conversation", protect, chatLimiter, getConversations);
+router.get("/conversations", protect, chatLimiter, getConversations);
 
-router.get("/conversations", protect, getConversations);
+router.post("/message", protect, chatLimiter, validate(sendMessageSchema), sendMessage);
 
-router.post("/message", protect, sendMessage);
 
-router.get("/:conversationId", protect, getMessages);
+router.get(
+  "/:conversationId",
+  protect,
+  chatLimiter,
+  validate(conversationIdParam, "params"),
+  getMessages,
+);
 
-router.delete("/conversation/:id", protect, deleteConversation);
-
-/*
-|--------------------------------------------------------------------------
-| Send Message
-|--------------------------------------------------------------------------
-*/
-
-router.post("/message", protect, async (req, res) => {
-  try {
-    const { conversationId, message } = req.body;
-
-    if (!conversationId || !message) {
-      return res.status(400).json({
-        success: false,
-        error: "conversationId and message are required",
-      });
-    }
-
-    await prisma.message.create({
-      data: {
-        role: "user",
-        content: message,
-        conversationId,
-      },
-    });
-
-    const reply = await coordinatorAgent(message);
-
-    await prisma.message.create({
-      data: {
-        role: "assistant",
-        content: reply,
-        conversationId,
-      },
-    });
-
-    res.json({
-      success: true,
-      reply,
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      success: false,
-      error: "Something went wrong",
-    });
-  }
-});
-
-/*
-|--------------------------------------------------------------------------
-| Get Messages
-|--------------------------------------------------------------------------
-*/
-
-router.get("/:conversationId", protect, async (req, res) => {
-  try {
-    const messages = await prisma.message.findMany({
-      where: {
-        conversationId: req.params.conversationId,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    });
-
-    res.json(messages);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      success: false,
-      error: "Something went wrong",
-    });
-  }
-});
+router.delete(
+  "/conversation/:id",
+  protect,
+  chatLimiter,
+  validate(idParam, "params"),
+  deleteConversation,
+);
 
 module.exports = router;

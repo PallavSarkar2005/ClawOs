@@ -39,6 +39,7 @@ model User {
   memoryCollections      MemoryCollection[]
   indexJobs              IndexJob[]
   memoryAccessLogs       MemoryAccessLog[]
+  agentExecutions        AgentExecution[]
 }
 
 model Conversation {
@@ -52,8 +53,9 @@ model Conversation {
   documentId String?
   document   Document? @relation(fields: [documentId], references: [id])
 
-  messages   Message[]
-  memories   Memory[]
+  messages         Message[]
+  memories         Memory[]
+  agentExecutions  AgentExecution[]
 }
 
 model Message {
@@ -498,6 +500,144 @@ model AiExecution {
   updatedAt    DateTime @updatedAt
 
   @@index([projectId])
+}
+
+/// Multi-agent runtime execution (Phase 2)
+model AgentExecution {
+  id              String   @id @default(uuid())
+  userId          String
+  conversationId  String?
+  projectId       String?
+  messageId       String?
+  status          String   @default("QUEUED")
+  intent          String?
+  plan            Json?
+  agentTree       Json     @default("[]")
+  finalOutput     String?
+  error           String?
+  cancelRequested Boolean  @default(false)
+  maxRetries      Int      @default(2)
+  timeoutMs       Int      @default(300000)
+  promptTokens    Int      @default(0)
+  completionTokens Int     @default(0)
+  totalTokens     Int      @default(0)
+  estimatedCost   Float    @default(0)
+  contextSize     Int      @default(0)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  steps           AgentStep[]
+  logs            AgentLog[]
+  toolCalls       AgentToolCall[]
+  metrics         AgentMetric[]
+  transitions     AgentStateTransition[]
+
+  @@index([userId, createdAt])
+  @@index([conversationId])
+  @@index([status])
+  @@index([projectId])
+}
+
+model AgentStep {
+  id               String   @id @default(uuid())
+  executionId      String
+  execution        AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  taskId           String?
+  agentType        String
+  status           String   @default("pending")
+  priority         Int      @default(0)
+  complexity       String?
+  dependencies     Json     @default("[]")
+  requiredTools    Json     @default("[]")
+  expectedOutputs  Json     @default("[]")
+  input            Json?
+  output           String?
+  reasoning        String?
+  prompt           String?
+  error            String?
+  retryCount       Int      @default(0)
+  maxRetries       Int      @default(2)
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  estimatedCost    Float    @default(0)
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  durationMs       Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  toolCalls        AgentToolCall[]
+  logs             AgentLog[]
+
+  @@index([executionId, status])
+  @@index([agentType])
+}
+
+model AgentToolCall {
+  id          String   @id @default(uuid())
+  executionId String
+  execution   AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  stepId      String?
+  step        AgentStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  agentType   String?
+  toolName    String
+  arguments   Json     @default("{}")
+  result      Json?
+  status      String   @default("pending")
+  error       String?
+  durationMs  Int?
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([executionId])
+  @@index([stepId])
+  @@index([toolName])
+}
+
+model AgentLog {
+  id          String   @id @default(uuid())
+  executionId String
+  execution   AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  stepId      String?
+  step        AgentStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+  level       String   @default("info")
+  agentType   String?
+  event       String?
+  message     String
+  data        Json?
+  createdAt   DateTime @default(now())
+
+  @@index([executionId, createdAt])
+  @@index([stepId])
+}
+
+model AgentMetric {
+  id          String   @id @default(uuid())
+  executionId String
+  execution   AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  key         String
+  value       Float
+  unit        String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([executionId, key])
+}
+
+model AgentStateTransition {
+  id          String   @id @default(uuid())
+  executionId String
+  execution   AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  fromState   String?
+  toState     String
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([executionId, createdAt])
 }
 
 model ProjectDiff {

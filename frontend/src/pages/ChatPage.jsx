@@ -29,15 +29,18 @@ import {
   createConversation,
   getConversations,
   getMessages,
-  sendMessage,
+  sendMessageStream,
   deleteConversation,
+  cancelExecution,
+  retryExecution,
+  getExecution,
 } from "../api/chatApi";
 import { getWorkflows } from "../api/workflowApi";
 import { setProvider } from "../api/aiApi";
 import { getDocuments } from "../api/documentApi";
 import { getSettings } from "../api/settingsApi";
 import { useAuth } from "../context/AuthContext";
-
+import ExecutionTimeline from "../components/chat/ExecutionTimeline";
 /* ─────────────── Typing dots component ─────────────── */
 function TypingDots() {
   return (
@@ -53,6 +56,22 @@ function TypingDots() {
       ))}
     </span>
   );
+}
+
+function emptyRuntime() {
+  return {
+    executionId: null,
+    status: "QUEUED",
+    plan: null,
+    agents: [],
+    tools: [],
+    logs: [],
+    tokens: { total: 0, prompt: 0, completion: 0 },
+    cost: 0,
+    currentAgent: null,
+    currentTool: null,
+    reasoning: "",
+  };
 }
 
 /* ─────────────── Message bubble ─────────────── */
@@ -233,11 +252,13 @@ export default function ChatPage() {
   const [previewContent, setPreviewContent] = useState("");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
-  const [reasoningStep, setReasoningStep] = useState(0);
+  const [runtime, setRuntime] = useState(null);
+  const [inspector, setInspector] = useState(null);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const optionsRef = useRef(null);
+  const abortRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -333,27 +354,154 @@ export default function ChatPage() {
     }
   };
 
-  // Thinking timeline driver
-  const reasoningLabels = [
-    "Planning workspace…",
-    "Scanning document indices…",
-    "Running LLM execution node…",
-    "Verifying constraints…",
-    "Compiling output…",
-  ];
+  // Thinking timeline driver removed — real runtime events drive UI
 
-  useEffect(() => {
-    let interval;
-    if (loading) {
-      setReasoningStep(0);
-      interval = setInterval(() => {
-        setReasoningStep((p) => (p < reasoningLabels.length - 1 ? p + 1 : p));
-      }, 1800);
-    } else {
-      setReasoningStep(0);
+  const handleCancel = async () => {
+    abortRef.current?.abort();
+    if (runtime?.executionId) {
+      try {
+        await cancelExecution(runtime.executionId);
+      } catch (e) {
+        console.error(e);
+      }
     }
-    return () => clearInterval(interval);
-  }, [loading]);
+    setLoading(false);
+  };
+
+  const handleRetry = async () => {
+    if (!runtime?.executionId) return;
+    try {
+      setLoading(true);
+      const result = await retryExecution(runtime.executionId);
+      if (result?.reply) {
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), role: "assistant", content: result.reply },
+        ]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInspect = async (id) => {
+    try {
+      const data = await getExecution(id);
+      setInspector(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const applyRuntimeEvent = (evt) => {
+    setRuntime((prev) => {
+      const next = { ...(prev || emptyRuntime()) };
+      if (evt.executionId) next.executionId = evt.executionId;
+
+      switch (evt.event) {
+        case "execution_started":
+          next.status = "QUEUED";
+          break;
+        case "state_changed":
+          next.status = evt.to || next.status;
+          break;
+        case "plan_created":
+          next.plan = {
+            intent: evt.intent,
+            strategy: evt.strategy,
+            tasks: evt.tasks || [],
+          };
+          next.agents = (evt.tasks || []).map((t) => ({
+            id: t.id,
+            agent: t.agent,
+            description: t.description,
+            status: "pending",
+          }));
+          next.status = "PLANNING";
+          break;
+        case "agent_started":
+          next.currentAgent = evt.agent;
+          next.agents = (next.agents || []).map((a) =>
+            a.agent === evt.agent || a.id === evt.taskId
+              ? { ...a, status: "running", description: evt.description || a.description }
+              : a,
+          );
+          if (!(next.agents || []).some((a) => a.agent === evt.agent)) {
+            next.agents = [
+              ...(next.agents || []),
+              { id: evt.taskId || evt.agent, agent: evt.agent, status: "running", description: evt.description },
+            ];
+          }
+          break;
+        case "agent_completed":
+          next.agents = (next.agents || []).map((a) =>
+            a.agent === evt.agent || a.id === evt.taskId
+              ? { ...a, status: "completed", durationMs: evt.durationMs, summary: (evt.output || "").slice(0, 120) }
+              : a,
+          );
+          break;
+        case "agent_failed":
+          next.agents = (next.agents || []).map((a) =>
+            a.agent === evt.agent ? { ...a, status: "failed", description: evt.error } : a,
+          );
+          break;
+        case "agent_reasoning":
+          next.reasoning = `${next.reasoning || ""}${evt.text || ""}\n`.slice(-4000);
+          break;
+        case "tool_started":
+          next.currentTool = evt.tool;
+          next.tools = [
+            ...(next.tools || []),
+            { tool: evt.tool, arguments: evt.arguments, status: "running", id: `${evt.tool}-${Date.now()}` },
+          ];
+          break;
+        case "tool_completed":
+        case "tool_failed":
+          next.currentTool = evt.event === "tool_completed" ? null : evt.tool;
+          next.tools = (next.tools || []).map((t) =>
+            t.tool === evt.tool && t.status === "running"
+              ? { ...t, status: evt.event === "tool_completed" ? "completed" : "failed" }
+              : t,
+          );
+          break;
+        case "metrics":
+          next.tokens = {
+            total: evt.totalTokens || 0,
+            prompt: evt.promptTokens || 0,
+            completion: evt.completionTokens || 0,
+          };
+          next.cost = evt.estimatedCost || 0;
+          break;
+        case "execution_completed":
+          next.status = "COMPLETED";
+          if (evt.tokens != null) next.tokens = { ...next.tokens, total: evt.tokens };
+          if (evt.cost != null) next.cost = evt.cost;
+          break;
+        case "execution_failed":
+          next.status = "FAILED";
+          break;
+        case "execution_cancelled":
+          next.status = "CANCELLED";
+          break;
+        default:
+          break;
+      }
+
+      next.logs = [
+        ...(next.logs || []),
+        {
+          ts: evt.ts || new Date().toISOString(),
+          event: evt.event,
+          message: evt.message || evt.agent || evt.tool || "",
+          agent: evt.agent,
+        },
+      ].slice(-80);
+
+      return next;
+    });
+  };
 
   const handleSend = async (overrideText = "") => {
     const text = overrideText || input;
@@ -377,33 +525,56 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMessage]);
     if (!overrideText) setInput("");
     setLoading(true);
+    setRuntime(emptyRuntime());
+    abortRef.current = new AbortController();
 
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
 
     try {
-      const response = await sendMessage(
-        targetConv.id,
-        text,
-        selectedSkill,
-        selectedWorkflow,
-        selectedDocument,
-        webSearchEnabled,
+      const response = await sendMessageStream(
+        {
+          conversationId: targetConv.id,
+          message: text,
+          skillId: selectedSkill,
+          workflowId: selectedWorkflow,
+          documentId: selectedDocument,
+          webSearchEnabled,
+        },
+        {
+          signal: abortRef.current.signal,
+          onEvent: applyRuntimeEvent,
+        },
       );
       setActiveSkill(response.skill);
-      const assistantMessage = { id: Date.now() + 1, role: "assistant", content: response.reply };
-      setMessages((prev) => [...prev, assistantMessage]);
+      if (response.reply) {
+        const assistantMessage = {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: response.reply,
+          executionId: response.executionId,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
       await loadConversations();
     } catch (error) {
-      console.error("Send message error:", error);
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now() + 2, role: "assistant", content: "⚠️ Connection timeout. Check backend models routing." },
-      ]);
+      if (error.name === "AbortError") {
+        setRuntime((r) => (r ? { ...r, status: "CANCELLED" } : r));
+      } else {
+        console.error("Send message error:", error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 2,
+            role: "assistant",
+            content: `⚠️ ${error.message || "Connection timeout. Check backend models routing."}`,
+          },
+        ]);
+      }
     } finally {
       setLoading(false);
+      abortRef.current = null;
     }
   };
 
@@ -469,7 +640,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, loading]);
+  }, [messages, loading, runtime]);
 
   const canSend = input.trim().length > 0 && !loading;
 
@@ -615,9 +786,9 @@ export default function ChatPage() {
                 ))}
               </AnimatePresence>
 
-              {/* Typing indicator */}
+              {/* Live agent runtime timeline */}
               <AnimatePresence>
-                {loading && (
+                {(loading || runtime) && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -627,10 +798,19 @@ export default function ChatPage() {
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#F15B42] to-[#F49CC4] flex items-center justify-center shrink-0 shadow-md shadow-[#F15B42]/20 ring-2 ring-[#F15B42]/10">
                       <Bot size={14} className="text-white" />
                     </div>
-                    <div className="bg-[#0D1626] border border-white/[0.06] px-4 py-3 rounded-2xl rounded-bl-sm flex flex-col gap-1.5">
-                      <TypingDots />
-                      <p className="text-[10px] text-slate-600 font-semibold">{reasoningLabels[reasoningStep]}</p>
-                    </div>
+                    {runtime ? (
+                      <ExecutionTimeline
+                        {...runtime}
+                        onCancel={handleCancel}
+                        onRetry={handleRetry}
+                        onInspect={handleInspect}
+                      />
+                    ) : (
+                      <div className="bg-[#0D1626] border border-white/[0.06] px-4 py-3 rounded-2xl rounded-bl-sm flex flex-col gap-1.5">
+                        <TypingDots />
+                        <p className="text-[10px] text-slate-600 font-semibold">Starting agent runtime…</p>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -667,10 +847,10 @@ export default function ChatPage() {
 
               {/* Send / Stop */}
               <button
-                onClick={() => handleSend()}
-                disabled={!canSend}
+                onClick={() => (loading ? handleCancel() : handleSend())}
+                disabled={!loading && !canSend}
                 className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 mb-0.5 ${
-                  canSend
+                  loading || canSend
                     ? "bg-[#F15B42] hover:bg-[#e04a31] text-white shadow-lg shadow-[#F15B42]/20"
                     : "bg-white/[0.04] text-slate-600 cursor-not-allowed"
                 }`}
@@ -727,6 +907,71 @@ export default function ChatPage() {
                     `<html><body style="font-family:sans-serif;padding:20px;color:#333;"><h3>Rendering artifact preview…</h3><p>Extracting nested HTML templates.</p></body></html>`
                   }
                 />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Execution Inspector */}
+      <AnimatePresence>
+        {inspector && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/80 backdrop-blur-md"
+            onClick={() => setInspector(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-3xl max-h-[85vh] bg-[#0D1626] border border-white/[0.08] rounded-3xl flex flex-col overflow-hidden shadow-2xl"
+            >
+              <div className="flex items-center justify-between px-5 h-12 border-b border-white/[0.06]">
+                <span className="text-xs font-bold text-slate-300">Execution Inspector</span>
+                <button
+                  onClick={() => setInspector(null)}
+                  className="w-7 h-7 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] flex items-center justify-center"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 text-[11px] font-mono text-slate-400">
+                <div>ID: {inspector.id}</div>
+                <div>Status: {inspector.status}</div>
+                <div>
+                  Tokens: {inspector.totalTokens} · Cost: ${(inspector.estimatedCost || 0).toFixed(6)}
+                </div>
+                <div className="pt-2 text-[9px] font-black uppercase tracking-widest text-slate-600">
+                  Steps
+                </div>
+                {(inspector.steps || []).map((s) => (
+                  <div key={s.id} className="bg-black/30 rounded-lg p-2">
+                    <div className="text-slate-200">
+                      {s.agentType} · {s.status} · {s.durationMs ?? "—"}ms
+                    </div>
+                    <div className="truncate">{(s.output || s.error || "").slice(0, 200)}</div>
+                  </div>
+                ))}
+                <div className="pt-2 text-[9px] font-black uppercase tracking-widest text-slate-600">
+                  Tool Calls
+                </div>
+                {(inspector.toolCalls || []).map((t) => (
+                  <div key={t.id} className="bg-black/30 rounded-lg p-2">
+                    {t.toolName} · {t.status} · {t.durationMs ?? "—"}ms
+                  </div>
+                ))}
+                <div className="pt-2 text-[9px] font-black uppercase tracking-widest text-slate-600">
+                  Transitions
+                </div>
+                {(inspector.transitions || []).map((t) => (
+                  <div key={t.id}>
+                    {t.fromState || "∅"} → {t.toState} {t.reason ? `(${t.reason})` : ""}
+                  </div>
+                ))}
               </div>
             </motion.div>
           </motion.div>

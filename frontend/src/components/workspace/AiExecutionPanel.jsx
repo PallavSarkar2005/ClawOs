@@ -9,6 +9,8 @@ import {
   Circle,
   Ban,
   PanelRightClose,
+  Wrench,
+  Coins,
 } from "lucide-react";
 import { formatTime, statusColor } from "./workspaceUtils";
 import "./ide.css";
@@ -38,6 +40,9 @@ export default function AiExecutionPanel({
   onCancel,
   onSelectExecution,
   onCollapse,
+  liveTools = [],
+  liveCost = 0,
+  liveAgent = null,
 }) {
   const [expanded, setExpanded] = useState({});
   const current = execution || executions?.[0];
@@ -45,9 +50,24 @@ export default function AiExecutionPanel({
     ? current.stages
     : STAGE_ORDER.map((name) => ({ name, status: "pending", summary: null }));
 
+  // Prefer agent-runtime steps when present
+  const runtimeSteps = current?.steps?.length
+    ? current.steps.map((s) => ({
+        name: s.agentType || s.name,
+        status: s.status,
+        summary: (s.output || s.error || "").slice(0, 200),
+        startedAt: s.startedAt,
+        completedAt: s.finishedAt,
+        durationMs: s.durationMs,
+      }))
+    : stages;
+
   const tokens =
     current?.tokensUsed ||
+    current?.totalTokens ||
     (current?.promptTokens || 0) + (current?.completionTokens || 0);
+
+  const cost = current?.estimatedCost ?? liveCost;
 
   return (
     <aside className="ide-ai">
@@ -57,7 +77,9 @@ export default function AiExecutionPanel({
           AI Execution
         </span>
         <div className="flex-1" />
-        {current?.status === "running" && onCancel && (
+        {(current?.status === "running" ||
+          (current?.status && !["COMPLETED", "completed", "FAILED", "failed", "CANCELLED", "cancelled"].includes(current.status))) &&
+          onCancel && (
           <button className="ide-btn ide-btn--danger" onClick={() => onCancel(current.id)}>
             <Ban size={11} /> Stop
           </button>
@@ -70,12 +92,31 @@ export default function AiExecutionPanel({
       </div>
 
       {current && (
-        <div className="px-3 pb-2 flex gap-3 text-[10px] text-[var(--ide-muted)]">
+        <div className="px-3 pb-2 flex flex-wrap gap-3 text-[10px] text-[var(--ide-muted)]">
           <span style={{ color: statusColor(current.status) }} className="font-bold uppercase">
             {current.status}
           </span>
+          {liveAgent && <span className="text-[#7CAADC]">{liveAgent}</span>}
           {tokens > 0 && <span>{tokens} tokens</span>}
+          {cost > 0 && (
+            <span className="inline-flex items-center gap-0.5">
+              <Coins size={10} /> ${Number(cost).toFixed(5)}
+            </span>
+          )}
           <span className="ml-auto">{formatTime(current.createdAt)}</span>
+        </div>
+      )}
+
+      {liveTools?.length > 0 && (
+        <div className="px-3 pb-2 space-y-1">
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-1">
+            <Wrench size={10} /> Live Tools
+          </p>
+          {liveTools.slice(-4).map((t, i) => (
+            <div key={i} className="text-[10px] text-slate-400 font-mono truncate">
+              {t.tool || t.toolName} · {t.status}
+            </div>
+          ))}
         </div>
       )}
 
@@ -99,7 +140,7 @@ export default function AiExecutionPanel({
         )}
 
         {!loading &&
-          stages.map((stage, idx) => {
+          runtimeSteps.map((stage, idx) => {
             const isOpen = expanded[stage.name] ?? stage.status === "running";
             const cls =
               stage.status === "running"
@@ -119,7 +160,7 @@ export default function AiExecutionPanel({
                 >
                   <StageIcon status={stage.status} />
                   <div className="flex-1 min-w-0">
-                    <div className="ide-stage__name">{stage.name}</div>
+                    <div className="ide-stage__name capitalize">{stage.name}</div>
                     <div
                       className="ide-stage__status"
                       style={{ color: statusColor(stage.status) }}
@@ -141,11 +182,12 @@ export default function AiExecutionPanel({
                         {stage.completedAt && (
                           <div>Finished {formatTime(stage.completedAt)}</div>
                         )}
+                        {stage.durationMs != null && <div>{stage.durationMs}ms</div>}
                       </div>
                     )}
                     {stage.summary || (
                       <span className="italic text-[var(--ide-dim)]">
-                        {stage.status === "running" ? "Streaming…" : "Waiting…"}
+                        {stage.status === "running" ? "Running…" : "Waiting…"}
                       </span>
                     )}
                   </div>

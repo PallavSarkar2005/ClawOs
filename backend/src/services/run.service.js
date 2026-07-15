@@ -1,20 +1,23 @@
-const { spawn } = require("child_process");
 const { EventEmitter } = require("events");
+const { spawn } = require("child_process");
 const prisma = require("../database/prisma");
 const fsWorkspace = require("./fs-workspace.service");
 const projectRepository = require("../repositories/project.repository");
+const { parseSafeCommand, spawnSafe } = require("../utils/safe-exec");
+const { safeError } = require("../utils/secure-logger");
+
+const RUN_TIMEOUT_MS = Number(process.env.RUN_TIMEOUT_MS) || 10 * 60 * 1000;
 
 class RunService extends EventEmitter {
   constructor() {
     super();
-    this.runs = new Map(); // runId -> { proc, projectId }
+    this.runs = new Map();
   }
 
   async start({ userId, projectId, command: overrideCmd }) {
     const project = await projectRepository.findById(projectId, userId);
     if (!project) throw new Error("Project not found");
 
-    // Stop any existing run for this project
     for (const [id, r] of this.runs) {
       if (r.projectId === projectId) {
         await this.stop(id);
@@ -45,10 +48,17 @@ class RunService extends EventEmitter {
       throw new Error("Could not detect runnable project type");
     }
 
+    let parsed;
+    try {
+      parsed = parseSafeCommand(command);
+    } catch (err) {
+      throw new Error(`Rejected run command: ${err.message}`);
+    }
+
     const run = await prisma.codeRun.create({
       data: {
         projectId,
-        command,
+        command: parsed.display,
         status: "running",
         projectType: detected.type,
         output: "",
@@ -59,15 +69,14 @@ class RunService extends EventEmitter {
     await projectRepository.createLog(projectId, {
       level: "info",
       source: "run",
-      message: `Run started: ${command}`,
+      message: `Run started: ${parsed.display}`,
     });
 
-    const isWin = process.platform === "win32";
-    const proc = spawn(command, {
+    const spawned = spawnSafe(parsed.file, parsed.args, {
       cwd: root,
-      env: { ...process.env, FORCE_COLOR: "1" },
-      shell: true,
+      timeoutMs: RUN_TIMEOUT_MS,
     });
+    const processHandle = spawned.proc;
 
     const started = Date.now();
     let output = "";
@@ -91,12 +100,17 @@ class RunService extends EventEmitter {
       }
     };
 
-    proc.stdout.on("data", (d) => append(d, "stdout"));
-    proc.stderr.on("data", (d) => append(d, "stderr"));
+    processHandle.stdout.on("data", (d) => append(d, "stdout"));
+    processHandle.stderr.on("data", (d) => append(d, "stderr"));
 
-    proc.on("exit", async (code, signal) => {
+    processHandle.on("exit", async (code, signal) => {
       const durationMs = Date.now() - started;
-      const status = signal === "SIGTERM" || signal === "SIGKILL" ? "stopped" : code === 0 ? "completed" : "failed";
+      const status =
+        spawned.timedOut || signal === "SIGTERM" || signal === "SIGKILL"
+          ? "stopped"
+          : code === 0
+            ? "completed"
+            : "failed";
       this.runs.delete(run.id);
       try {
         await prisma.codeRun.update({
@@ -106,7 +120,7 @@ class RunService extends EventEmitter {
             exitCode: code,
             finishedAt: new Date(),
             durationMs,
-            output,
+            output: spawned.timedOut ? `${output}\n[timed out]` : output,
           },
         });
         await projectRepository.update(projectId, userId, {
@@ -123,7 +137,11 @@ class RunService extends EventEmitter {
       }
     });
 
-    this.runs.set(run.id, { proc, projectId, userId });
+    processHandle.on("error", (err) => {
+      safeError("Run process error", err);
+    });
+
+    this.runs.set(run.id, { proc: processHandle, projectId, userId });
     return prisma.codeRun.findUnique({ where: { id: run.id } });
   }
 
@@ -145,7 +163,10 @@ class RunService extends EventEmitter {
     }
     try {
       if (process.platform === "win32") {
-        spawn("taskkill", ["/pid", String(r.proc.pid), "/f", "/t"]);
+        spawn("taskkill", ["/pid", String(r.proc.pid), "/f", "/t"], {
+          shell: false,
+          windowsHide: true,
+        });
       } else {
         r.proc.kill("SIGTERM");
         setTimeout(() => {

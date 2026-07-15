@@ -8,8 +8,16 @@ function runGit(cwd, args, timeoutMs = 30000) {
   return new Promise((resolve) => {
     const proc = spawn("git", args, {
       cwd,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-      shell: process.platform === "win32",
+      env: {
+        PATH: process.env.PATH,
+        PATHEXT: process.env.PATHEXT,
+        SYSTEMROOT: process.env.SYSTEMROOT,
+        GIT_TERMINAL_PROMPT: "0",
+        HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
+      },
+      shell: false,
+      windowsHide: true,
     });
     let stdout = "";
     let stderr = "";

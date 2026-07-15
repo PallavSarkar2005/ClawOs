@@ -47,8 +47,15 @@ class IdeController {
 
   async stopRun(req, res) {
     try {
+      const project = await projectRepository.findById(req.params.projectId, req.user.id);
+      if (!project) return res.status(404).json({ message: "Project not found" });
+
       const { runId } = req.body;
       if (runId) {
+        const existing = await prisma.codeRun.findFirst({
+          where: { id: runId, projectId: project.id },
+        });
+        if (!existing) return res.status(404).json({ message: "Run not found" });
         const run = await runService.stop(runId);
         return res.json(run);
       }
@@ -219,7 +226,7 @@ class IdeController {
     try {
       const project = await projectRepository.findById(req.params.projectId, req.user.id);
       if (!project) return res.status(404).json({ message: "Project not found" });
-      const live = terminalService.listByProject(req.params.projectId);
+      const live = terminalService.listByProject(req.params.projectId, req.user.id);
       const stored = await prisma.terminalSession.findMany({
         where: { projectId: req.params.projectId },
         orderBy: { updatedAt: "desc" },

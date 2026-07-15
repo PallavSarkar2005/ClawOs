@@ -8,15 +8,24 @@ const {
   forgotPasswordSchema,
   resetPasswordSchema,
 } = require("../validators/auth.validator");
+const {
+  setAuthCookies,
+  clearAuthCookies,
+  getRefreshTokenFromRequest,
+} = require("../utils/cookies");
 
 class AuthController {
   async register(req, res) {
     try {
       const result = registerSchema.safeParse(req.body);
       if (!result.success) {
+        const issues = result.error.issues || [];
         return res.status(400).json({
-          message: result.error.errors[0].message,
-          errors: result.error.format(),
+          message: issues[0]?.message || "Validation failed",
+          errors: issues.map((i) => ({
+            path: i.path?.join(".") || "",
+            message: i.message,
+          })),
         });
       }
 
@@ -37,9 +46,13 @@ class AuthController {
     try {
       const result = loginSchema.safeParse(req.body);
       if (!result.success) {
+        const issues = result.error.issues || [];
         return res.status(400).json({
-          message: result.error.errors[0].message,
-          errors: result.error.format(),
+          message: issues[0]?.message || "Validation failed",
+          errors: issues.map((i) => ({
+            path: i.path?.join(".") || "",
+            message: i.message,
+          })),
         });
       }
 
@@ -52,23 +65,15 @@ class AuthController {
         agentDetails,
       );
 
-      // Set cookie if requested/remembered (supports optional secure cookie architecture)
-      const cookieOptions = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-      };
+      setAuthCookies(res, {
+        accessToken,
+        refreshToken,
+        rememberMe: rememberMe !== false,
+      });
 
-      if (rememberMe) {
-        cookieOptions.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
-      }
-
-      res.cookie("refreshToken", refreshToken, cookieOptions);
-
+      // Tokens stay in HttpOnly cookies only — never returned to JS
       res.json({
         success: true,
-        accessToken,
-        refreshToken, // Send in body too for storage-based clients
         user,
       });
     } catch (error) {
@@ -78,37 +83,46 @@ class AuthController {
 
   async logout(req, res) {
     try {
-      const refreshToken = req.body.refreshToken || req.cookies.refreshToken;
+      const refreshToken = getRefreshTokenFromRequest(req);
       const sessionId = req.user?.sessionId;
 
       await authService.logoutSession(req.user.id, sessionId, refreshToken);
+      clearAuthCookies(res);
 
-      res.clearCookie("refreshToken");
       res.json({ success: true, message: "Logged out successfully" });
     } catch (error) {
+      clearAuthCookies(res);
       res.status(500).json({ message: "Logout failed" });
+    }
+  }
+
+  async logoutEverywhere(req, res) {
+    try {
+      await authService.revokeAllSessions(req.user.id, null, null);
+      clearAuthCookies(res);
+      res.json({ success: true, message: "Logged out from all devices" });
+    } catch (error) {
+      res.status(500).json({ message: "Logout everywhere failed" });
     }
   }
 
   async refresh(req, res) {
     try {
-      const refreshToken = req.body.refreshToken || req.cookies.refreshToken;
+      const refreshToken = getRefreshTokenFromRequest(req);
 
       const tokens = await authService.refresh(refreshToken);
 
-      res.cookie("refreshToken", tokens.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+      setAuthCookies(res, {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        rememberMe: true,
       });
 
       res.json({
         success: true,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
       });
     } catch (error) {
+      clearAuthCookies(res);
       res.status(401).json({ message: error.message });
     }
   }
@@ -126,17 +140,19 @@ class AuthController {
     try {
       const result = profileUpdateSchema.safeParse(req.body);
       if (!result.success) {
+        const issues = result.error.issues || [];
         return res.status(400).json({
-          message: result.error.issues?.[0]?.message || result.error.errors?.[0]?.message || "Invalid profile data",
-          errors: result.error.format?.() || result.error,
+          message: issues[0]?.message || "Invalid profile data",
+          errors: issues.map((i) => ({
+            path: i.path?.join(".") || "",
+            message: i.message,
+          })),
         });
       }
 
       let avatarUrl = undefined;
       if (req.file) {
-        const host = req.get("host") || "localhost:5000";
-        const protocol = req.protocol || "http";
-        avatarUrl = `${protocol}://${host}/uploads/${req.file.filename}`;
+        avatarUrl = `/uploads/${req.file.filename}`;
       }
 
       const updatedUser = await authService.updateProfile(
@@ -159,14 +175,25 @@ class AuthController {
     try {
       const result = changePasswordSchema.safeParse(req.body);
       if (!result.success) {
+        const issues = result.error.issues || [];
         return res.status(400).json({
-          message: result.error.errors[0].message,
-          errors: result.error.format(),
+          message: issues[0]?.message || "Validation failed",
+          errors: issues.map((i) => ({
+            path: i.path?.join(".") || "",
+            message: i.message,
+          })),
         });
       }
 
       const { currentPassword, newPassword } = result.data;
       await authService.changePassword(req.user.id, currentPassword, newPassword);
+
+      // Invalidate other sessions after password change
+      await authService.revokeAllSessions(
+        req.user.id,
+        req.user.sessionId,
+        getRefreshTokenFromRequest(req),
+      );
 
       res.json({
         success: true,
@@ -182,7 +209,7 @@ class AuthController {
       const result = forgotPasswordSchema.safeParse(req.body);
       if (!result.success) {
         return res.status(400).json({
-          message: result.error.errors[0].message,
+          message: result.error.issues?.[0]?.message || "Validation failed",
         });
       }
 
@@ -200,9 +227,13 @@ class AuthController {
     try {
       const result = resetPasswordSchema.safeParse(req.body);
       if (!result.success) {
+        const issues = result.error.issues || [];
         return res.status(400).json({
-          message: result.error.errors[0].message,
-          errors: result.error.format(),
+          message: issues[0]?.message || "Validation failed",
+          errors: issues.map((i) => ({
+            path: i.path?.join(".") || "",
+            message: i.message,
+          })),
         });
       }
 
@@ -243,7 +274,7 @@ class AuthController {
       }
 
       await authService.deleteAccount(req.user.id, password);
-      res.clearCookie("refreshToken");
+      clearAuthCookies(res);
       res.json({
         success: true,
         message: "Account deleted permanently.",
@@ -279,7 +310,7 @@ class AuthController {
 
   async revokeAllSessions(req, res) {
     try {
-      const refreshToken = req.body?.refreshToken || req.cookies?.refreshToken || req.headers["x-refresh-token"];
+      const refreshToken = getRefreshTokenFromRequest(req);
       await authService.revokeAllSessions(req.user.id, req.user.sessionId, refreshToken);
       res.json({ success: true, message: "All other sessions revoked successfully" });
     } catch (error) {
