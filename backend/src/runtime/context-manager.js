@@ -1,95 +1,49 @@
-const { contextBuilder } = require("../memory");
-const prisma = require("../database/prisma");
-const { packSections, estimateTokens, truncateToBudget } = require("./token");
+const { contextEngine } = require("../context");
+const { estimateTokens, truncateToBudget } = require("./token");
 const { DEFAULT_TOKEN_BUDGET } = require("./constants");
 
 /**
- * Context Manager — rank, compress, and fit context into a token budget.
- * Coordinator never sends raw history; agents receive packed context.
+ * Context Manager — Phase 4 production facade used by coordinator & planner.
+ * Delegates to the Context Engine (retrieval → ranking → compression → budget).
  */
 class ContextManager {
   async build(userId, prompt, options = {}) {
-    const tokenBudget = options.tokenBudget || DEFAULT_TOKEN_BUDGET;
-    const agentType = options.agentType || null;
-
-    const built = await contextBuilder.build(userId, prompt, {
-      tokenBudget: Math.floor(tokenBudget * 0.7),
+    const result = await contextEngine.build(userId, prompt, {
+      tokenBudget: options.tokenBudget || DEFAULT_TOKEN_BUDGET,
+      agentType: options.agentType || null,
       conversationId: options.conversationId || null,
       projectId: options.projectId || null,
       documentId: options.documentId || null,
-      agentType,
+      skillPrompt: options.skillPrompt,
+      skillId: options.skillId,
+      workflowPrompt: options.workflowPrompt,
+      workflowId: options.workflowId,
+      webContext: options.webContext,
+      priorOutputs: options.priorOutputs,
+      agentExecutionId: options.agentExecutionId,
       topK: options.topK || 12,
+      model: options.model,
+      modelLimit: options.modelLimit,
+      persist: options.persist !== false,
+      compressLevel: options.compressLevel,
     });
 
-    const sections = [];
-
-    if (options.skillPrompt) {
-      sections.push({
-        label: "SKILL",
-        text: options.skillPrompt,
-        budget: Math.floor(tokenBudget * 0.08),
-      });
-    }
-    if (options.workflowPrompt) {
-      sections.push({
-        label: "WORKFLOW",
-        text: options.workflowPrompt,
-        budget: Math.floor(tokenBudget * 0.08),
-      });
-    }
-    if (options.webContext) {
-      sections.push({
-        label: "WEB",
-        text: options.webContext,
-        budget: Math.floor(tokenBudget * 0.12),
-      });
-    }
-    if (options.priorOutputs?.length) {
-      const text = options.priorOutputs
-        .map((o) => `[${o.agent}]\n${o.output}`)
-        .join("\n\n---\n\n");
-      sections.push({
-        label: "PRIOR_AGENT_OUTPUTS",
-        text,
-        budget: Math.floor(tokenBudget * 0.25),
-      });
-    }
-    if (built.context) {
-      sections.push({
-        label: "MEMORY_AND_PROJECT",
-        text: built.context,
-        budget: Math.floor(tokenBudget * 0.45),
-      });
-    }
-
-    if (options.conversationId && !built.context?.includes("CONVERSATION")) {
-      const msgs = await prisma.message.findMany({
-        where: { conversationId: options.conversationId },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      });
-      const convo = msgs
-        .reverse()
-        .map((m) => `${m.role}: ${m.content}`)
-        .join("\n");
-      sections.push({
-        label: "RECENT_MESSAGES",
-        text: convo,
-        budget: Math.floor(tokenBudget * 0.15),
-      });
-    }
-
-    const packed = packSections(sections, tokenBudget);
-    const text = packed.sections
-      .map((s) => `===== ${s.label} (${s.tokens} tok) =====\n${s.text}`)
-      .join("\n\n");
-
     return {
-      text,
-      sections: packed.sections,
-      usedTokens: packed.usedTokens,
-      citations: built.citations || [],
-      budget: tokenBudget,
+      text: result.text,
+      sections: result.sections,
+      usedTokens: result.usedTokens,
+      citations: result.citations || [],
+      budget: result.budget,
+      allocation: result.allocation,
+      modelLimit: result.modelLimit,
+      dropped: result.dropped,
+      compressionRatio: result.compressionRatio,
+      reasoningPath: result.reasoningPath,
+      observability: result.observability,
+      sessionId: result.sessionId,
+      graph: result.graph,
+      agentType: result.agentType,
+      durationMs: result.durationMs,
     };
   }
 
@@ -99,6 +53,18 @@ class ContextManager {
 
   size(text) {
     return estimateTokens(text);
+  }
+
+  async preview(userId, prompt, options = {}) {
+    return this.build(userId, prompt, options);
+  }
+
+  async inspect(sessionId, userId) {
+    return contextEngine.inspect(sessionId, userId);
+  }
+
+  async replay(sessionId, userId) {
+    return contextEngine.replay(sessionId, userId);
   }
 }
 

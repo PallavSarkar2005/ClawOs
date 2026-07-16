@@ -42,6 +42,7 @@ model User {
   agentExecutions        AgentExecution[]
   toolPermissions        ToolPermission[]
   toolUsages             ToolUsage[]
+  contextSessions        ContextSession[]
 }
 
 model Conversation {
@@ -775,4 +776,133 @@ model ProjectDiff {
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
+}
+
+/// Phase 4 — Production Context Manager
+model ContextSession {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId   String?
+  projectId        String?
+  agentExecutionId String?
+  agentType        String?
+  query            String
+  modelLimit       Int      @default(128000)
+  tokenBudget      Int      @default(6000)
+  usedTokens       Int      @default(0)
+  compressionRatio Float    @default(1.0)
+  allocation       Json     @default("{}")
+  dropped          Json     @default("[]")
+  reasoningPath    Json     @default("[]")
+  graph            Json     @default("{}")
+  status           String   @default("built")
+  durationMs       Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  retrieved        RetrievedContext[]
+  scores           ContextScore[]
+  summaries        ContextSummary[]
+  compressions     CompressionHistory[]
+  metrics          RankingMetrics[]
+
+  @@index([userId, createdAt])
+  @@index([conversationId])
+  @@index([agentExecutionId])
+  @@index([projectId])
+  @@index([agentType])
+}
+
+model RetrievedContext {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     ContextSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  source      String
+  type        String
+  sourceId    String?
+  content     String
+  score       Float    @default(0)
+  reason      String?
+  tokenCount  Int      @default(0)
+  selected    Boolean  @default(true)
+  metadata    Json     @default("{}")
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId, selected])
+  @@index([source, type])
+  @@index([sourceId])
+}
+
+model ContextScore {
+  id              String   @id @default(uuid())
+  sessionId       String
+  session         ContextSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  itemKey         String
+  similarity      Float    @default(0)
+  recency         Float    @default(0)
+  importance      Float    @default(0)
+  frequency       Float    @default(0)
+  confidence      Float    @default(0)
+  agentRelevance  Float    @default(0)
+  projectRelevance Float   @default(0)
+  pinned          Float    @default(0)
+  collectionWeight Float   @default(0)
+  executionSuccess Float   @default(0)
+  finalScore      Float    @default(0)
+  factors         Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([finalScore])
+}
+
+model ContextSummary {
+  id          String   @id @default(uuid())
+  sessionId   String?
+  session     ContextSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  userId      String
+  conversationId String?
+  projectId   String?
+  kind        String   @default("conversation")
+  originalTokens Int   @default(0)
+  summaryTokens  Int   @default(0)
+  summary     String
+  sourceIds   Json     @default("[]")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, kind])
+  @@index([conversationId])
+  @@index([sessionId])
+}
+
+model CompressionHistory {
+  id             String   @id @default(uuid())
+  sessionId      String
+  session        ContextSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  method         String
+  inputTokens    Int      @default(0)
+  outputTokens   Int      @default(0)
+  ratio          Float    @default(1.0)
+  details        Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([method])
+}
+
+model RankingMetrics {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     ContextSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  key         String
+  value       Float
+  unit        String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId, key])
 }

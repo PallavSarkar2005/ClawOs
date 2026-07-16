@@ -230,13 +230,24 @@ async function createPlan(ctx) {
     workflowPrompt: ctx.workflowPrompt,
     webContext: ctx.webContext,
     agentType: "planner",
+    agentExecutionId: ctx.executionId,
     tokenBudget: 3500,
   });
 
   ctx.emit?.(STREAM_EVENTS.CONTEXT_BUILT, {
     agent: "planner",
     tokens: context.usedTokens,
-    sections: context.sections.map((s) => s.label),
+    sessionId: context.sessionId,
+    allocation: context.allocation,
+    compressionRatio: context.compressionRatio,
+    sections: (context.sections || []).map((s) => ({
+      label: s.label,
+      tokens: s.tokens,
+      score: s.score,
+      reason: s.reason,
+    })),
+    observability: context.observability,
+    reasoningPath: context.reasoningPath,
   });
 
   let plan;

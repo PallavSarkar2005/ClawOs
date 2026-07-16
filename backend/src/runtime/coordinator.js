@@ -354,6 +354,7 @@ class Coordinator extends EventEmitter {
       webContext: ctx.webContext,
       priorOutputs,
       agentType: task.agent,
+      agentExecutionId: handle.executionId,
       tokenBudget: 5500,
     });
 
@@ -361,10 +362,24 @@ class Coordinator extends EventEmitter {
       agent: task.agent,
       tokens: context.usedTokens,
       stepId: step.id,
+      sessionId: context.sessionId,
+      allocation: context.allocation,
+      compressionRatio: context.compressionRatio,
+      dropped: (context.dropped || []).length,
+      citations: (context.citations || []).slice(0, 20),
+      reasoningPath: context.reasoningPath,
+      observability: context.observability,
+      sections: (context.sections || []).map((s) => ({
+        label: s.label,
+        tokens: s.tokens,
+        score: s.score,
+        reason: s.reason,
+      })),
     });
     emit(STREAM_EVENTS.MEMORY_READ, {
       agent: task.agent,
       tokens: context.usedTokens,
+      sessionId: context.sessionId,
     });
 
     const agentCtx = {

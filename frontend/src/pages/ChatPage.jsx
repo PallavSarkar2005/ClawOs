@@ -21,6 +21,7 @@ import {
   X,
   ArrowUp,
   Cpu,
+  Layers,
 } from "lucide-react";
 
 import Sidebar from "../components/Sidebar";
@@ -42,6 +43,7 @@ import { getSettings } from "../api/settingsApi";
 import { useAuth } from "../context/AuthContext";
 import ExecutionTimeline from "../components/chat/ExecutionTimeline";
 import ExecutionInspector from "../components/chat/ExecutionInspector";
+import ContextInspector from "../components/chat/ContextInspector";
 import { toolsApi } from "../api/toolsApi";
 /* ─────────────── Typing dots component ─────────────── */
 function TypingDots() {
@@ -73,6 +75,8 @@ function emptyRuntime() {
     currentAgent: null,
     currentTool: null,
     reasoning: "",
+    context: null,
+    contextHistory: [],
   };
 }
 
@@ -256,6 +260,7 @@ export default function ChatPage() {
   const [showOptions, setShowOptions] = useState(false);
   const [runtime, setRuntime] = useState(null);
   const [inspector, setInspector] = useState(null);
+  const [contextInspectorOpen, setContextInspectorOpen] = useState(false);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -475,6 +480,31 @@ export default function ChatPage() {
             completion: evt.completionTokens || 0,
           };
           next.cost = evt.estimatedCost || 0;
+          break;
+        case "context_built":
+          next.context = {
+            agent: evt.agent,
+            tokens: evt.tokens,
+            sessionId: evt.sessionId,
+            allocation: evt.allocation,
+            compressionRatio: evt.compressionRatio,
+            dropped: evt.dropped,
+            citations: evt.citations,
+            reasoningPath: evt.reasoningPath,
+            observability: evt.observability,
+            sections: evt.sections,
+            budget: evt.observability?.packBudget,
+            graph: evt.observability?.graph,
+          };
+          next.contextHistory = [
+            ...(next.contextHistory || []).slice(-20),
+            {
+              agent: evt.agent,
+              tokens: evt.tokens,
+              sessionId: evt.sessionId,
+              ts: evt.ts || new Date().toISOString(),
+            },
+          ];
           break;
         case "execution_completed":
           next.status = "COMPLETED";
@@ -801,12 +831,25 @@ export default function ChatPage() {
                       <Bot size={14} className="text-white" />
                     </div>
                     {runtime ? (
-                      <ExecutionTimeline
-                        {...runtime}
-                        onCancel={handleCancel}
-                        onRetry={handleRetry}
-                        onInspect={handleInspect}
-                      />
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <ExecutionTimeline
+                          {...runtime}
+                          onCancel={handleCancel}
+                          onRetry={handleRetry}
+                          onInspect={handleInspect}
+                        />
+                        {runtime.context && (
+                          <button
+                            type="button"
+                            onClick={() => setContextInspectorOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-sky-300 hover:border-sky-500/30 transition"
+                          >
+                            <Layers size={11} />
+                            Context · {runtime.context.tokens || 0} tok
+                            {runtime.context.agent ? ` · ${runtime.context.agent}` : ""}
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <div className="bg-[#0D1626] border border-white/[0.06] px-4 py-3 rounded-2xl rounded-bl-sm flex flex-col gap-1.5">
                         <TypingDots />
@@ -935,6 +978,14 @@ export default function ChatPage() {
           />
         )}
       </AnimatePresence>
+
+      {contextInspectorOpen && (
+        <ContextInspector
+          data={inspector}
+          liveContext={runtime?.context}
+          onClose={() => setContextInspectorOpen(false)}
+        />
+      )}
 
       <style>{`
         @keyframes bounce {
