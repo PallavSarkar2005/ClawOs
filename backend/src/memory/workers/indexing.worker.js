@@ -2,6 +2,7 @@ const documentRepository = require("../repositories/document.repository");
 const indexJobRepository = require("../repositories/index-job.repository");
 const chunkingService = require("../services/chunking.service");
 const embeddingService = require("../services/embedding.service");
+const embeddingSync = require("../../knowledge/embeddings/sync");
 const parserService = require("../services/document-parser.service");
 const { DOC_STATUS, contentHash, estimateTokens } = require("../utils");
 const fs = require("fs");
@@ -117,6 +118,11 @@ async function processJob(job) {
         embeddingModel: "auto",
         contentHash: contentHash(chunk.content),
       });
+      await embeddingSync.syncChunkEmbedding(chunk.id, chunk.content, job.userId, {
+        ...chunk,
+        embedding,
+        contentHash: contentHash(chunk.content),
+      }).catch(() => null);
       const progress = 45 + Math.round(((i + 1) / toEmbed.length) * 50);
       if (i % 4 === 0 || i === toEmbed.length - 1) {
         await documentRepository.update(documentId, { indexProgress: progress });

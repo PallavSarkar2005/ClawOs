@@ -2,6 +2,8 @@ const memoryRepository = require("../repositories/memory.repository");
 const relationshipRepository = require("../repositories/relationship.repository");
 const embeddingService = require("./embedding.service");
 const scoringService = require("./scoring.service");
+const embeddingSync = require("../../knowledge/embeddings/sync");
+const graphEngine = require("../../knowledge/graph/engine");
 const prisma = require("../../database/prisma");
 const { MEMORY_SCOPES, contentHash, estimateTokens, clamp } = require("../utils");
 
@@ -74,6 +76,9 @@ class MemoryService {
       data: { ownerId, memoryId: memory.id, action: "create", metadata: { scope } },
     });
 
+    await embeddingSync.syncMemoryEmbedding(memory.id, content, ownerId, memory).catch(() => null);
+    await graphEngine.syncFromMemory(ownerId, memory).catch(() => null);
+
     return memory;
   }
 
@@ -124,6 +129,10 @@ class MemoryService {
     await prisma.memoryAccessLog.create({
       data: { ownerId, memoryId: id, action: "update" },
     });
+    if (updated) {
+      await embeddingSync.syncMemoryEmbedding(id, updated.content, ownerId, existing).catch(() => null);
+      await graphEngine.syncFromMemory(ownerId, updated).catch(() => null);
+    }
     return updated;
   }
 
@@ -149,12 +158,14 @@ class MemoryService {
     const memory = await memoryRepository.findById(id, ownerId);
     if (!memory) return null;
     const embedding = await embeddingService.embedOne(memory.content, { userId: ownerId });
-    return memoryRepository.update(id, ownerId, {
+    const result = await memoryRepository.update(id, ownerId, {
       embedding,
       embeddingDim: embedding.length,
       embeddingModel: "auto",
       contentHash: contentHash(memory.content),
     });
+    await embeddingSync.syncMemoryEmbedding(id, memory.content, ownerId, result).catch(() => null);
+    return result;
   }
 
   async stats(ownerId) {

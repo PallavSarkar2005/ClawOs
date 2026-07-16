@@ -4,6 +4,7 @@ const http = require("http");
 const app = require("./app");
 const { attachTerminalWs } = require("./services/terminal-ws.service");
 const { startIndexingWorker, startMemoryScheduler } = require("./memory");
+const { initKnowledgeEngine } = require("./knowledge");
 const { getEnv } = require("./config/env");
 const terminalService = require("./services/terminal.service");
 const { initToolPlatform } = require("./tools");
@@ -14,6 +15,7 @@ const server = http.createServer(app);
 attachTerminalWs(server);
 startIndexingWorker();
 startMemoryScheduler();
+initKnowledgeEngine().catch((e) => console.warn("[knowledge] init:", e.message));
 
 initToolPlatform({ hotReload: true, loadMcp: true }).catch((e) => {
   console.warn("[tools] init warning:", e.message);

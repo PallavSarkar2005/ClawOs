@@ -43,6 +43,10 @@ model User {
   toolPermissions        ToolPermission[]
   toolUsages             ToolUsage[]
   contextSessions        ContextSession[]
+  knowledgeNodes         KnowledgeNode[]
+  knowledgeCollections   KnowledgeCollection[]
+  searchHistory          SearchHistory[]
+  knowledgeJobs          KnowledgeJob[]
 }
 
 model Conversation {
@@ -905,4 +909,225 @@ model RankingMetrics {
   createdAt   DateTime @default(now())
 
   @@index([sessionId, key])
+}
+
+/// Phase 5 — Knowledge Engine (Memory & RAG v2)
+model KnowledgeNode {
+  id              String   @id @default(uuid())
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  sourceType      String
+  sourceId        String?
+  content         String
+  contentHash     String?
+  scope           String   @default("USER")
+  importance      Float    @default(0.5)
+  pinned          Boolean  @default(false)
+  confidence      Float    @default(1.0)
+  frequency       Int      @default(0)
+  decay           Float    @default(0.0)
+  archived        Boolean  @default(false)
+  tags            String[] @default([])
+  metadata        Json     @default("{}")
+  tokenCount      Int      @default(0)
+  projectId       String?
+  conversationId  String?
+  documentId      String?
+  agentType       String?
+  workspaceId     String?
+  collectionId    String?
+  collection      KnowledgeCollection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  parentId        String?
+  parent          KnowledgeNode? @relation("NodeHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        KnowledgeNode[] @relation("NodeHierarchy")
+  embeddingId     String?
+  embedding       Embedding? @relation(fields: [embeddingId], references: [id], onDelete: SetNull)
+  deletedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastAccessed    DateTime @default(now())
+
+  edgesFrom       KnowledgeEdge[] @relation("KnowledgeFrom")
+  edgesTo         KnowledgeEdge[] @relation("KnowledgeTo")
+  citations       Citation[]
+
+  @@index([ownerId, sourceType])
+  @@index([ownerId, scope])
+  @@index([ownerId, deletedAt])
+  @@index([ownerId, pinned])
+  @@index([ownerId, archived])
+  @@index([sourceType, sourceId])
+  @@index([projectId])
+  @@index([documentId])
+  @@index([contentHash])
+  @@index([collectionId])
+}
+
+model KnowledgeEdge {
+  id         String   @id @default(uuid())
+  fromId     String
+  toId       String
+  type       String
+  weight     Float    @default(1.0)
+  metadata   Json     @default("{}")
+  ownerId    String
+  createdAt  DateTime @default(now())
+
+  from       KnowledgeNode @relation("KnowledgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to         KnowledgeNode @relation("KnowledgeTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@index([fromId])
+  @@index([toId])
+  @@index([ownerId])
+  @@index([type])
+  @@unique([fromId, toId, type])
+}
+
+model Embedding {
+  id             String   @id @default(uuid())
+  contentHash    String
+  model          String
+  provider       String
+  dimension      Int      @default(1536)
+  version        Int      @default(1)
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  nodes          KnowledgeNode[]
+  versions       EmbeddingVersion[]
+
+  @@index([contentHash, model])
+  @@index([model, version])
+}
+
+model EmbeddingVersion {
+  id          String   @id @default(uuid())
+  embeddingId String
+  embedding   Embedding @relation(fields: [embeddingId], references: [id], onDelete: Cascade)
+  version     Int
+  model       String
+  provider    String
+  dimension   Int
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@unique([embeddingId, version])
+  @@index([embeddingId])
+}
+
+model Retrieval {
+  id              String   @id @default(uuid())
+  ownerId         String
+  query           String
+  mode            String   @default("hybrid")
+  topK            Int      @default(10)
+  threshold       Float    @default(0.12)
+  resultCount     Int      @default(0)
+  latencyMs       Int?
+  indexUsed       String?
+  embeddingModel  String?
+  distanceMetric  String   @default("cosine")
+  filters         Json     @default("{}")
+  results         Json     @default("[]")
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  citations       Citation[]
+
+  @@index([ownerId, createdAt])
+  @@index([mode])
+}
+
+model SearchHistory {
+  id          String   @id @default(uuid())
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  query       String
+  mode        String   @default("hybrid")
+  resultCount Int      @default(0)
+  latencyMs   Int?
+  filters     Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+}
+
+model Citation {
+  id              String   @id @default(uuid())
+  retrievalId     String?
+  retrieval       Retrieval? @relation(fields: [retrievalId], references: [id], onDelete: SetNull)
+  nodeId          String?
+  node            KnowledgeNode? @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  sourceType      String
+  sourceId        String?
+  content         String
+  confidence      Float    @default(0)
+  similarity      Float    @default(0)
+  page            Int?
+  chunkIndex      Int?
+  documentName    String?
+  filePath        String?
+  repository      String?
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([retrievalId])
+  @@index([nodeId])
+  @@index([sourceType, sourceId])
+}
+
+model KnowledgeCollection {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  color       String?
+  pinned      Boolean  @default(false)
+  isShared    Boolean  @default(false)
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  nodes       KnowledgeNode[]
+
+  @@index([ownerId])
+}
+
+model GraphMetrics {
+  id          String   @id @default(uuid())
+  ownerId     String
+  nodeCount   Int      @default(0)
+  edgeCount   Int      @default(0)
+  avgDegree   Float    @default(0)
+  density     Float    @default(0)
+  clusters    Int      @default(0)
+  metadata    Json     @default("{}")
+  computedAt  DateTime @default(now())
+
+  @@index([ownerId, computedAt])
+}
+
+model KnowledgeJob {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String
+  status      String    @default("queued")
+  progress    Float     @default(0)
+  stage       String?
+  error       String?
+  retries     Int       @default(0)
+  maxRetries  Int       @default(3)
+  payload     Json      @default("{}")
+  result      Json?
+  deadLetter  Boolean   @default(false)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([type, status])
 }

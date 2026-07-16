@@ -1,5 +1,6 @@
 const prisma = require("../../database/prisma");
 const memoryService = require("../services/memory.service");
+const ltmEngine = require("../../knowledge/memory/ltm");
 const documentRepository = require("../repositories/document.repository");
 const indexJobRepository = require("../repositories/index-job.repository");
 const { INDEX_JOB_STATUS, DOC_STATUS, contentHash } = require("../utils");
@@ -66,7 +67,7 @@ async function decayPass() {
   });
   for (const u of users) {
     try {
-      await memoryService.applyDecayPass(u.id);
+      await ltmEngine.decayPass(u.id);
     } catch (err) {
       console.warn("[MemoryScheduler] decay failed for", u.id, err.message);
     }

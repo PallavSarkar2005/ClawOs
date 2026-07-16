@@ -26,6 +26,18 @@ import {
   createRelationship,
 } from "../api/memoryApi";
 import {
+  knowledgeSearch,
+  getIndexStatus,
+  getEmbeddingStatus,
+  getSearchHistory,
+  listKnowledgeCollections,
+  createKnowledgeCollection,
+  listPinnedKnowledge,
+  inspectRetrieval,
+  optimizeIndexes,
+  backfillEmbeddings,
+} from "../api/knowledgeApi";
+import {
   Brain,
   Search,
   Plus,
@@ -47,10 +59,11 @@ import {
   Sparkles,
   Share2,
   FolderOpen,
+  Activity,
 } from "lucide-react";
 
 const SCOPES = ["ALL", "USER", "CONVERSATION", "PROJECT", "WORKSPACE", "AGENT", "WORKFLOW", "DOCUMENT"];
-const VIEWS = ["browse", "graph", "timeline", "documents"];
+const VIEWS = ["browse", "search", "graph", "collections", "status", "timeline", "documents"];
 
 function StatusPill({ status }) {
   const map = {
@@ -107,13 +120,18 @@ export default function MemoryPage() {
   const [newScope, setNewScope] = useState("USER");
   const [collectionName, setCollectionName] = useState("");
   const [error, setError] = useState("");
+  const [indexStatus, setIndexStatus] = useState(null);
+  const [embeddingStatus, setEmbeddingStatus] = useState(null);
+  const [knowledgeCollections, setKnowledgeCollections] = useState([]);
+  const [searchMeta, setSearchMeta] = useState(null);
+  const [retrievalInspector, setRetrievalInspector] = useState(null);
   const fileRef = useRef(null);
 
   const loadCore = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [mem, st, cols, docs, jobRes, hist] = await Promise.all([
+      const [mem, st, cols, docs, jobRes, hist, idxSt, embSt, kCols] = await Promise.all([
         getMemories({
           scope: scope === "ALL" ? undefined : scope,
           pinned: filterPinned || undefined,
@@ -125,6 +143,9 @@ export default function MemoryPage() {
         listMemoryDocuments({ take: 50 }),
         listIndexJobs({ take: 20 }),
         getMemoryHistory({ take: 40 }),
+        getIndexStatus().catch(() => null),
+        getEmbeddingStatus().catch(() => null),
+        listKnowledgeCollections().catch(() => ({ items: [] })),
       ]);
       setMemories(mem.items || []);
       setTotal(mem.total || 0);
@@ -133,6 +154,9 @@ export default function MemoryPage() {
       setDocuments(docs.items || []);
       setJobs(jobRes.items || []);
       setHistory(hist.items || []);
+      setIndexStatus(idxSt);
+      setEmbeddingStatus(embSt);
+      setKnowledgeCollections(kCols.items || []);
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to load memory engine");
     } finally {
@@ -201,8 +225,18 @@ export default function MemoryPage() {
       return;
     }
     try {
-      const result = await searchMemory(searchQuery, { mode: "hybrid", topK: 20 });
+      const result = await knowledgeSearch(searchQuery, { mode: "hybrid", topK: 20, rerank: true });
       setSearchResults(result);
+      setSearchMeta({
+        latencyMs: result.latencyMs,
+        indexUsed: result.indexUsed,
+        embeddingModel: result.embeddingModel,
+        retrievalId: result.retrievalId,
+        citations: result.citations,
+      });
+      if (result.retrievalId) {
+        inspectRetrieval(result.retrievalId).then(setRetrievalInspector).catch(() => null);
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -231,6 +265,7 @@ export default function MemoryPage() {
         lastAccessed: r.lastAccessed,
         embedding: r.type === "chunk" ? true : undefined,
         _search: r,
+        similarity: r.similarity ?? r.semanticScore ?? r.hybridScore,
       }));
     }
     let list = memories;
@@ -252,10 +287,10 @@ export default function MemoryPage() {
           <div>
             <div className="flex items-center gap-2 text-[#F15B42] mb-1">
               <Brain size={18} />
-              <span className="text-xs uppercase tracking-[0.2em] font-medium">Memory Engine</span>
+              <span className="text-xs uppercase tracking-[0.2em] font-medium">Knowledge Engine</span>
             </div>
-            <h1 className="text-2xl font-semibold text-slate-50 tracking-tight">Shared RAG memory</h1>
-            <p className="text-sm text-slate-400 mt-1">Search, index, and inspect memories across agents, chats, and documents.</p>
+            <h1 className="text-2xl font-semibold text-slate-50 tracking-tight">Memory & RAG v2</h1>
+            <p className="text-sm text-slate-400 mt-1">pgvector search, knowledge graph, collections, and semantic retrieval across every source.</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -281,7 +316,7 @@ export default function MemoryPage() {
         <div className="px-6 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 border-b border-white/[0.06]">
           {[
             { label: "Memories", value: stats?.total ?? total, icon: Database },
-            { label: "Embedded", value: stats?.embedded ?? 0, icon: Sparkles },
+            { label: "Vectors", value: embeddingStatus?.counts?.total ?? stats?.embedded ?? 0, icon: Sparkles },
             { label: "Pinned", value: stats?.pinned ?? 0, icon: Pin },
             { label: "Documents", value: stats?.documents ?? documents.length, icon: FileText },
             { label: "Jobs", value: jobs.filter((j) => j.status !== "completed").length, icon: Layers },
@@ -303,7 +338,7 @@ export default function MemoryPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="Hybrid semantic search…"
+              placeholder="Natural language search…"
               className="bg-transparent outline-none text-sm text-slate-200 w-full"
             />
             <button type="button" onClick={handleSearch} className="text-xs text-[#F15B42]">Search</button>
@@ -505,6 +540,110 @@ export default function MemoryPage() {
               </AnimatePresence>
             )}
 
+            {view === "search" && (
+              <div className="space-y-3">
+                {searchMeta && (
+                  <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div><span className="text-slate-500">Latency</span><div className="text-slate-200">{searchMeta.latencyMs}ms</div></div>
+                    <div><span className="text-slate-500">Index</span><div className="text-slate-200">{searchMeta.indexUsed || "hnsw"}</div></div>
+                    <div><span className="text-slate-500">Model</span><div className="text-slate-200 truncate">{searchMeta.embeddingModel || "auto"}</div></div>
+                    <div><span className="text-slate-500">Results</span><div className="text-slate-200">{searchResults?.count ?? 0}</div></div>
+                  </div>
+                )}
+                {(searchResults?.results || []).map((r) => (
+                  <div key={`${r.type}-${r.id}`} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 mb-1">
+                      <span className="uppercase">{r.type}</span>
+                      {r.similarity != null && <span className="text-emerald-400">sim {(r.similarity * 100).toFixed(1)}%</span>}
+                      {r.hybridScore != null && <span>score {r.hybridScore.toFixed(3)}</span>}
+                      {r.documentName && <span>{r.documentName}</span>}
+                    </div>
+                    <p className="text-sm text-slate-200 line-clamp-4">{r.content}</p>
+                  </div>
+                ))}
+                {searchMeta?.citations?.length > 0 && (
+                  <div className="rounded-2xl border border-[#F15B42]/20 p-4">
+                    <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">Citations</div>
+                    {searchMeta.citations.map((c) => (
+                      <div key={c.index} className="text-xs text-slate-400 border-t border-white/5 py-2">
+                        [{c.index}] {c.document || c.source} · conf {c.confidence}
+                        <div className="text-slate-300 mt-1 line-clamp-2">{c.snippet}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!searchResults?.results?.length && (
+                  <p className="text-slate-500 text-sm">Run a search to see pgvector retrieval results with similarity scores.</p>
+                )}
+              </div>
+            )}
+
+            {view === "collections" && (
+              <div className="space-y-3">
+                <form
+                  className="flex gap-2"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!collectionName.trim()) return;
+                    await createKnowledgeCollection({ name: collectionName.trim() });
+                    setCollectionName("");
+                    loadCore();
+                  }}
+                >
+                  <input
+                    value={collectionName}
+                    onChange={(e) => setCollectionName(e.target.value)}
+                    placeholder="New knowledge collection"
+                    className="flex-1 rounded-xl border border-white/10 bg-[#0F172A] text-sm px-3 py-2 text-slate-200"
+                  />
+                  <button type="submit" className="text-xs px-3 py-2 rounded-xl bg-[#F15B42]/20 text-[#F15B42]">Create</button>
+                </form>
+                {knowledgeCollections.map((c) => (
+                  <div key={c.id} className="rounded-2xl border border-white/[0.06] px-4 py-3 flex justify-between">
+                    <div>
+                      <div className="text-sm text-slate-100">{c.name}</div>
+                      <div className="text-xs text-slate-500">{c._count?.nodes ?? 0} nodes · {c.pinned ? "pinned" : "active"}</div>
+                    </div>
+                    {c.color && <span className="w-3 h-3 rounded-full" style={{ background: c.color }} />}
+                  </div>
+                ))}
+                {!knowledgeCollections.length && <p className="text-slate-500 text-sm">No knowledge collections yet.</p>}
+              </div>
+            )}
+
+            {view === "status" && (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mb-3"><Activity size={14} /> Vector index status</div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><span className="text-slate-500 text-xs">Memory vectors</span><div>{indexStatus?.vectorCount?.memories ?? 0}</div></div>
+                    <div><span className="text-slate-500 text-xs">Chunk vectors</span><div>{indexStatus?.vectorCount?.chunks ?? 0}</div></div>
+                    <div><span className="text-slate-500 text-xs">Recommended</span><div>{indexStatus?.recommendedIndex ?? "hnsw"}</div></div>
+                    <div><span className="text-slate-500 text-xs">HNSW</span><div>{indexStatus?.metrics?.hnsw ? "active" : "pending"}</div></div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <button type="button" onClick={async () => { await optimizeIndexes(); loadCore(); }} className="text-xs px-3 py-2 rounded-xl border border-white/10 text-slate-300">Optimize indexes</button>
+                    <button type="button" onClick={async () => { await backfillEmbeddings(); loadCore(); }} className="text-xs px-3 py-2 rounded-xl border border-[#F15B42]/30 text-[#F15B42]">Backfill vectors</button>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
+                  <div className="text-xs text-slate-500 mb-2">Embedding pipeline</div>
+                  <div className="text-sm text-slate-200">Pending memories: {embeddingStatus?.pendingMemories ?? 0}</div>
+                  <div className="text-sm text-slate-200">Total indexed: {embeddingStatus?.counts?.total ?? 0}</div>
+                </div>
+                {retrievalInspector?.citations?.length > 0 && (
+                  <div className="rounded-2xl border border-white/[0.07] p-4">
+                    <div className="text-xs text-slate-500 mb-2">Last retrieval inspector</div>
+                    {retrievalInspector.citations.slice(0, 5).map((c) => (
+                      <div key={c.id} className="text-xs text-slate-400 py-1 border-t border-white/5">
+                        {c.sourceType} · sim {(c.similarity * 100).toFixed(1)}% · conf {(c.confidence * 100).toFixed(1)}%
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {view === "timeline" && (
               <div className="space-y-2">
                 {history.map((h) => (
@@ -651,7 +790,7 @@ export default function MemoryPage() {
                   </div>
                 )}
                 <div className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-400 space-y-1">
-                  <div>Embedding: {Array.isArray(inspector.embedding) && inspector.embedding.length ? `${inspector.embeddingDim || inspector.embedding.length}-d · ${inspector.embeddingModel || "auto"}` : "not embedded"}</div>
+                  <div>Embedding: {Array.isArray(inspector.embedding) && inspector.embedding.length ? `${inspector.embeddingDim || inspector.embedding.length}-d · ${inspector.embeddingModel || "auto"} · pgvector` : "not embedded"}</div>
                   <div>Version: {inspector.version}</div>
                   <div>Source: {inspector.source || "—"}</div>
                   <div>Hash: {inspector.contentHash?.slice(0, 12) || "—"}</div>
