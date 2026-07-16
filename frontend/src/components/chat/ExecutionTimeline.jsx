@@ -183,17 +183,33 @@ export default function ExecutionTimeline({
           <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-1">
             Tool Calls
           </p>
-          {tools.slice(-6).map((t, i) => (
-            <div key={t.id || i} className="flex items-center gap-2 text-[10px]">
-              <StatusIcon status={t.status} />
-              <span className="font-mono text-slate-300">{t.tool || t.toolName}</span>
-              <span className="text-slate-600 truncate flex-1">
-                {typeof t.arguments === "object"
-                  ? JSON.stringify(t.arguments).slice(0, 60)
-                  : String(t.summary || "")}
-              </span>
-            </div>
-          ))}
+          {tools.slice(-8).map((t, i) => {
+            const st = String(t.status || "").toLowerCase();
+            const label =
+              st === "running"
+                ? t.progress?.message || "Running…"
+                : st === "completed" || st === "done"
+                  ? t.summary ||
+                    (t.result?.count != null
+                      ? `Retrieved ${t.result.count}`
+                      : t.result?.ok === false
+                        ? t.result.error
+                        : "Done")
+                  : t.error || t.summary || "";
+            return (
+              <div key={t.id || i} className="flex items-center gap-2 text-[10px]">
+                <StatusIcon status={t.status} />
+                <span className="font-mono text-slate-300">{t.tool || t.toolName}</span>
+                <span className="text-slate-500 truncate flex-1">{label}</span>
+                {t.durationMs != null && (
+                  <span className="text-slate-600">{formatMs(t.durationMs)}</span>
+                )}
+                {t.retries > 0 && (
+                  <span className="text-amber-500/80">↻{t.retries}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

@@ -20,6 +20,7 @@ const settingsRoutes = require("./routes/settings.routes");
 const integrationsRoutes = require("./routes/integrations.routes");
 const dataRoutes = require("./routes/data.routes");
 const runtimeRoutes = require("./routes/runtime.routes");
+const toolsRoutes = require("./routes/tools.routes");
 
 const env = getEnv();
 const app = express();
@@ -102,6 +103,7 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/integrations", integrationsRoutes);
 app.use("/api/data", dataRoutes);
 app.use("/api/runtime", runtimeRoutes);
+app.use("/api/tools", toolsRoutes);
 
 app.use((err, req, res, next) => {
   if (err && err.message === "CORS origin not allowed") {

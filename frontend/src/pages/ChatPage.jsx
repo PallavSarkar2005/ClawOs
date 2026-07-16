@@ -41,6 +41,8 @@ import { getDocuments } from "../api/documentApi";
 import { getSettings } from "../api/settingsApi";
 import { useAuth } from "../context/AuthContext";
 import ExecutionTimeline from "../components/chat/ExecutionTimeline";
+import ExecutionInspector from "../components/chat/ExecutionInspector";
+import { toolsApi } from "../api/toolsApi";
 /* ─────────────── Typing dots component ─────────────── */
 function TypingDots() {
   return (
@@ -916,65 +918,21 @@ export default function ChatPage() {
       {/* Execution Inspector */}
       <AnimatePresence>
         {inspector && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/80 backdrop-blur-md"
-            onClick={() => setInspector(null)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-3xl max-h-[85vh] bg-[#0D1626] border border-white/[0.08] rounded-3xl flex flex-col overflow-hidden shadow-2xl"
-            >
-              <div className="flex items-center justify-between px-5 h-12 border-b border-white/[0.06]">
-                <span className="text-xs font-bold text-slate-300">Execution Inspector</span>
-                <button
-                  onClick={() => setInspector(null)}
-                  className="w-7 h-7 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] flex items-center justify-center"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 text-[11px] font-mono text-slate-400">
-                <div>ID: {inspector.id}</div>
-                <div>Status: {inspector.status}</div>
-                <div>
-                  Tokens: {inspector.totalTokens} · Cost: ${(inspector.estimatedCost || 0).toFixed(6)}
-                </div>
-                <div className="pt-2 text-[9px] font-black uppercase tracking-widest text-slate-600">
-                  Steps
-                </div>
-                {(inspector.steps || []).map((s) => (
-                  <div key={s.id} className="bg-black/30 rounded-lg p-2">
-                    <div className="text-slate-200">
-                      {s.agentType} · {s.status} · {s.durationMs ?? "—"}ms
-                    </div>
-                    <div className="truncate">{(s.output || s.error || "").slice(0, 200)}</div>
-                  </div>
-                ))}
-                <div className="pt-2 text-[9px] font-black uppercase tracking-widest text-slate-600">
-                  Tool Calls
-                </div>
-                {(inspector.toolCalls || []).map((t) => (
-                  <div key={t.id} className="bg-black/30 rounded-lg p-2">
-                    {t.toolName} · {t.status} · {t.durationMs ?? "—"}ms
-                  </div>
-                ))}
-                <div className="pt-2 text-[9px] font-black uppercase tracking-widest text-slate-600">
-                  Transitions
-                </div>
-                {(inspector.transitions || []).map((t) => (
-                  <div key={t.id}>
-                    {t.fromState || "∅"} → {t.toState} {t.reason ? `(${t.reason})` : ""}
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
+          <ExecutionInspector
+            data={inspector}
+            onClose={() => setInspector(null)}
+            onReplay={async (toolCall) => {
+              try {
+                const toolId = toolCall.toolName;
+                await toolsApi.invoke(toolId, {
+                  arguments: toolCall.arguments || {},
+                  projectId: inspector.projectId || undefined,
+                });
+              } catch {
+                /* best-effort replay */
+              }
+            }}
+          />
         )}
       </AnimatePresence>
 

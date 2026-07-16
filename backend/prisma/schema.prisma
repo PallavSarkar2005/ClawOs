@@ -40,6 +40,8 @@ model User {
   indexJobs              IndexJob[]
   memoryAccessLogs       MemoryAccessLog[]
   agentExecutions        AgentExecution[]
+  toolPermissions        ToolPermission[]
+  toolUsages             ToolUsage[]
 }
 
 model Conversation {
@@ -638,6 +640,125 @@ model AgentStateTransition {
   createdAt   DateTime @default(now())
 
   @@index([executionId, createdAt])
+}
+
+/// Phase 3 — Production Tool Calling Platform
+model Tool {
+  id          String   @id
+  name        String
+  description String
+  category    String
+  version     String   @default("1.0.0")
+  schema      Json     @default("{}")
+  permissions Json     @default("[]")
+  timeout     Int      @default(30000)
+  retries     Int      @default(1)
+  source      String   @default("builtin")
+  pluginId    String?
+  mcpServerId String?
+  enabled     Boolean  @default(true)
+  dangerous   Boolean  @default(false)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  metrics     ToolMetric[]
+  usages      ToolUsage[]
+
+  @@index([category])
+  @@index([source])
+  @@index([enabled])
+}
+
+model ToolExecution {
+  id               String   @id @default(uuid())
+  toolId           String
+  toolVersion      String?
+  userId           String?
+  agentExecutionId String?
+  agentStepId      String?
+  agentType        String?
+  status           String   @default("pending")
+  inputs           Json     @default("{}")
+  validatedArgs    Json     @default("{}")
+  output           Json?
+  error            String?
+  errorCode        String?
+  durationMs       Int?
+  latencyMs        Int?
+  retries          Int      @default(0)
+  cached           Boolean  @default(false)
+  tokenUsage       Int      @default(0)
+  cost             Float    @default(0)
+  startedAt        DateTime @default(now())
+  finishedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  logs             ToolLog[]
+
+  @@index([toolId, createdAt])
+  @@index([userId, createdAt])
+  @@index([agentExecutionId])
+  @@index([status])
+}
+
+model ToolPermission {
+  id          String   @id @default(uuid())
+  toolId      String
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agentType   String?
+  executionId String?
+  required    Json     @default("[]")
+  granted     Json     @default("[]")
+  allowed     Boolean  @default(false)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([toolId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ToolMetric {
+  id        String   @id @default(uuid())
+  toolId    String?
+  tool      Tool?    @relation(fields: [toolId], references: [id], onDelete: SetNull)
+  key       String
+  value     Float
+  unit      String?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([toolId, key])
+  @@index([createdAt])
+}
+
+model ToolLog {
+  id          String   @id @default(uuid())
+  executionId String
+  execution   ToolExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  toolId      String?
+  level       String   @default("info")
+  message     String
+  data        Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([executionId, createdAt])
+  @@index([toolId])
+}
+
+model ToolUsage {
+  id         String   @id @default(uuid())
+  toolId     String?
+  tool       Tool?    @relation(fields: [toolId], references: [id], onDelete: SetNull)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  durationMs Int      @default(0)
+  success    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([toolId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model ProjectDiff {

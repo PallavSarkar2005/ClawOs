@@ -6,6 +6,7 @@ const { attachTerminalWs } = require("./services/terminal-ws.service");
 const { startIndexingWorker, startMemoryScheduler } = require("./memory");
 const { getEnv } = require("./config/env");
 const terminalService = require("./services/terminal.service");
+const { initToolPlatform } = require("./tools");
 
 const { PORT } = getEnv();
 
@@ -13,6 +14,10 @@ const server = http.createServer(app);
 attachTerminalWs(server);
 startIndexingWorker();
 startMemoryScheduler();
+
+initToolPlatform({ hotReload: true, loadMcp: true }).catch((e) => {
+  console.warn("[tools] init warning:", e.message);
+});
 
 function shutdown(signal) {
   console.log(`[shutdown] ${signal} — cleaning up`);

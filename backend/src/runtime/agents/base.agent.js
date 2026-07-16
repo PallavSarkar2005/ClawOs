@@ -193,84 +193,109 @@ class BaseAgent {
 
       await persistence.accumulateUsage(ctx.executionId, response.usage || {});
 
-      if (response.tool_calls?.length) {
+          if (response.tool_calls?.length) {
         messages.push({
           role: "assistant",
           content: response.content || null,
           tool_calls: response.tool_calls,
         });
 
-        for (const tc of response.tool_calls) {
-          toolCallCount += 1;
-          this.metrics.toolCalls += 1;
-          const name = tc.function?.name;
-          const args = tc.function?.arguments || "{}";
+        // Parallel tool execution via Tool Engine
+        const toolResults = await Promise.all(
+          response.tool_calls.map(async (tc) => {
+            toolCallCount += 1;
+            this.metrics.toolCalls += 1;
+            const name = tc.function?.name;
+            const args = tc.function?.arguments || "{}";
+            let parsedArgs;
+            try {
+              parsedArgs = JSON.parse(args);
+            } catch {
+              parsedArgs = { raw: args };
+            }
 
-          ctx.emit?.(STREAM_EVENTS.TOOL_STARTED, {
-            agent: this.type,
-            tool: name,
-            arguments: (() => {
-              try {
-                return JSON.parse(args);
-              } catch {
-                return { raw: args };
-              }
-            })(),
-            stepId: ctx.step?.id,
-          });
-
-          const toolRow = await persistence.createToolCall({
-            executionId: ctx.executionId,
-            stepId: ctx.step?.id,
-            agentType: this.type,
-            toolName: name,
-            arguments: (() => {
-              try {
-                return JSON.parse(args);
-              } catch {
-                return { raw: args };
-              }
-            })(),
-          });
-
-          let toolResult;
-          try {
-            toolResult = await executeTool(name, args, {
-              userId: ctx.userId,
-              projectId: ctx.projectId,
-              conversationId: ctx.conversationId,
-              documentId: ctx.documentId,
-              agentType: this.type,
-            });
-            await persistence.finishToolCall(toolRow.id, {
-              result: toolResult,
-              status: toolResult.ok ? "completed" : "failed",
-              error: toolResult.ok ? null : toolResult.error,
-            });
-            ctx.emit?.(
-              toolResult.ok ? STREAM_EVENTS.TOOL_COMPLETED : STREAM_EVENTS.TOOL_FAILED,
-              {
-                agent: this.type,
-                tool: name,
-                result: toolResult,
-                stepId: ctx.step?.id,
-              },
-            );
-          } catch (error) {
-            toolResult = { ok: false, error: error.message };
-            await persistence.finishToolCall(toolRow.id, {
-              result: toolResult,
-              status: "failed",
-              error: error.message,
-            });
-            ctx.emit?.(STREAM_EVENTS.TOOL_FAILED, {
+            ctx.emit?.(STREAM_EVENTS.TOOL_STARTED, {
               agent: this.type,
               tool: name,
-              error: error.message,
+              arguments: parsedArgs,
               stepId: ctx.step?.id,
             });
-          }
 
+            const toolRow = await persistence.createToolCall({
+              executionId: ctx.executionId,
+              stepId: ctx.step?.id,
+              agentType: this.type,
+              toolName: name,
+              arguments: parsedArgs,
+            });
+
+            let toolResult;
+            try {
+              toolResult = await executeTool(name, args, {
+                userId: ctx.userId,
+                projectId: ctx.projectId,
+                conversationId: ctx.conversationId,
+                documentId: ctx.documentId,
+                agentType: this.type,
+                executionId: ctx.executionId,
+                stepId: ctx.step?.id,
+                allowedTools: this.tools,
+                signal: ctx.signal,
+                emit: (event, data) => {
+                  if (event === "tool_progress") {
+                    ctx.emit?.(STREAM_EVENTS.TOOL_STARTED, {
+                      agent: this.type,
+                      tool: name,
+                      progress: data,
+                      stepId: ctx.step?.id,
+                    });
+                  }
+                  ctx.emit?.(STREAM_EVENTS.LOG, {
+                    level: "info",
+                    agent: this.type,
+                    event,
+                    message: data?.message || event,
+                    data,
+                  });
+                },
+              });
+              await persistence.finishToolCall(toolRow.id, {
+                result: toolResult,
+                status: toolResult.ok ? "completed" : "failed",
+                error: toolResult.ok ? null : toolResult.error,
+              });
+              ctx.emit?.(
+                toolResult.ok ? STREAM_EVENTS.TOOL_COMPLETED : STREAM_EVENTS.TOOL_FAILED,
+                {
+                  agent: this.type,
+                  tool: name,
+                  result: toolResult,
+                  executionId: toolResult.executionId,
+                  durationMs: toolResult.durationMs,
+                  retries: toolResult.retries,
+                  stepId: ctx.step?.id,
+                },
+              );
+            } catch (error) {
+              toolResult = { ok: false, error: error.message };
+              await persistence.finishToolCall(toolRow.id, {
+                result: toolResult,
+                status: "failed",
+                error: error.message,
+              });
+              ctx.emit?.(STREAM_EVENTS.TOOL_FAILED, {
+                agent: this.type,
+                tool: name,
+                error: error.message,
+                stepId: ctx.step?.id,
+              });
+            }
+
+            return { tc, toolResult };
+          }),
+        );
+
+        for (const { tc, toolResult } of toolResults) {
           messages.push({
             role: "tool",
             tool_call_id: tc.id,
