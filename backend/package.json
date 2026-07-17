@@ -6,7 +6,8 @@
   "scripts": {
     "prestart": "node scripts/ensure-env.js",
     "predev": "node scripts/ensure-env.js",
-    "test": "node --test src/memory/__tests__/memory-engine.test.js src/knowledge/__tests__/knowledge-engine.test.js src/__tests__/security.test.js src/__tests__/auth-cookies.test.js src/__tests__/safe-exec.test.js src/__tests__/validation.test.js src/__tests__/runtime/*.test.js src/__tests__/tools/*.test.js src/__tests__/context/*.test.js src/intelligence/__tests__/*.test.js src/workflows/__tests__/*.test.js",
+    "test": "node --test src/memory/__tests__/memory-engine.test.js src/knowledge/__tests__/knowledge-engine.test.js src/__tests__/security.test.js src/__tests__/auth-cookies.test.js src/__tests__/safe-exec.test.js src/__tests__/validation.test.js src/__tests__/runtime/*.test.js src/__tests__/tools/*.test.js src/__tests__/context/*.test.js src/intelligence/__tests__/*.test.js src/workflows/__tests__/*.test.js src/observability/__tests__/*.test.js",
+    "test:observability": "node --test src/observability/__tests__/*.test.js",
     "test:workflows": "node --test src/workflows/__tests__/*.test.js",
     "test:knowledge": "node --test src/knowledge/__tests__/knowledge-engine.test.js",
     "test:context": "node --test src/__tests__/context/*.test.js",

@@ -234,8 +234,11 @@ async function chatOllama({ messages, model, temp, max_tokens, signal, onToken }
   };
 }
 
+const { wrapChat } = require("../observability/bridge/llm");
+
 module.exports = {
-  chat,
+  chat: wrapChat(chat),
   resolveProvider,
   resolveModel,
+  chatRaw: chat,
 };

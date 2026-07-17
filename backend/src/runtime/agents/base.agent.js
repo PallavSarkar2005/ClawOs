@@ -183,6 +183,11 @@ class BaseAgent {
         settings: ctx.settings || {},
         signal: ctx.signal,
         onToken: toolSchemas ? undefined : ctl.onToken,
+        obsContext: {
+          executionId: ctx.executionId,
+          contextInjected: ctx.contextText,
+          repositoryContext: ctx.repositoryContext,
+        },
       });
 
       usage.prompt_tokens += response.usage?.prompt_tokens || 0;

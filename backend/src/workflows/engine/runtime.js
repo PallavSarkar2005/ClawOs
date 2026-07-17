@@ -7,6 +7,7 @@ const { canTransition, isTerminal, assertTransition } = require("./state-machine
 const { ConcurrencyController, WorkerPool } = require("./concurrency");
 const { executeNode, sleep } = require("../nodes/handlers");
 const { validateDefinition } = require("../validation/validator");
+const { wrapEmit, beginWorkflowExecution } = require("../../observability/bridge/workflow");
 
 const active = new Map();
 const listeners = new Map();
@@ -14,7 +15,7 @@ const concurrency = new ConcurrencyController({ maxGlobal: 20, maxPerUser: 5 });
 const queue = [];
 let pumping = false;
 
-function emit(executionId, event, data = {}) {
+function emitRaw(executionId, event, data = {}) {
   const payload = { event, executionId, at: new Date().toISOString(), ...data };
   const set = listeners.get(executionId);
   if (set) for (const fn of set) {
@@ -22,6 +23,8 @@ function emit(executionId, event, data = {}) {
   }
   return payload;
 }
+
+const emit = wrapEmit(emitRaw);
 
 function subscribe(executionId, fn) {
   if (!listeners.has(executionId)) listeners.set(executionId, new Set());
@@ -214,6 +217,12 @@ async function executeDefinition(execution, options = {}) {
   await persistStatus(execution.id, EXECUTION_STATUS.RUNNING, {
     startedAt: execution.startedAt || new Date(),
     currentNodeKeys: [],
+  });
+  beginWorkflowExecution(execution, {
+    userId: execution.userId,
+    projectId: execution.projectId || options.projectId || null,
+    dag: { nodes: def.nodes?.length || 0, edges: def.edges?.length || 0 },
+    inputs: options.inputs,
   });
   emit(execution.id, STREAM_EVENTS.EXECUTION_STARTED, {});
 

@@ -26,6 +26,7 @@ const { analyzeQuality } = require("./analysis/quality");
 const { detectDeadCode, detectUnusedImports, detectUnusedFiles } = require("./analysis/dead-code");
 const { generateArchitecture } = require("./analysis/architecture");
 const workspaceMemory = require("./memory/workspace-memory");
+const intelligenceBridge = require("../observability/bridge/intelligence");
 
 const SKIP_PATH_RE =
   /(?:^|\/)(?:node_modules|\.git|dist|build|\.next|coverage|\.cache|vendor|__pycache__|\.venv)(?:\/|$)/i;
@@ -81,6 +82,8 @@ async function indexRepository(projectId, ownerId, options = {}) {
 
   let repo;
   let job;
+  let obsHandle = null;
+  const indexStartedAt = Date.now();
   try {
     repo = await ensureRepository(projectId, ownerId);
     job = await prisma.repoIndexJob.create({
@@ -91,6 +94,12 @@ async function indexRepository(projectId, ownerId, options = {}) {
         stage: "loading",
         startedAt: new Date(),
       },
+    });
+    obsHandle = intelligenceBridge.beginIndex({
+      projectId,
+      ownerId,
+      repositoryId: repo.id,
+      jobId: job.id,
     });
 
     await prisma.repository.update({
@@ -112,6 +121,14 @@ async function indexRepository(projectId, ownerId, options = {}) {
       data: { filesTotal: codeFiles.length, stage: "parsing" },
     });
     setProgress(repo.id, { filesTotal: codeFiles.length, stage: "parsing" });
+    intelligenceBridge.progressIndex(obsHandle, {
+      repositoryId: repo.id,
+      projectId,
+      jobId: job.id,
+      stage: "parsing",
+      filesTotal: codeFiles.length,
+      userId: ownerId,
+    });
 
     // Existing hashes for incremental
     const existing = options.incremental
@@ -523,6 +540,21 @@ async function indexRepository(projectId, ownerId, options = {}) {
       filesTotal: codeFiles.length,
     });
 
+    intelligenceBridge.endIndex(obsHandle, {
+      repositoryId: repo.id,
+      projectId,
+      jobId: job.id,
+      stage: "completed",
+      filesProcessed: codeFiles.length,
+      filesTotal: codeFiles.length,
+      symbolsIndexed: symbols.length,
+      dependencyUpdates: deps.length,
+      architectureChanges: architecture ? [architecture.summary || "updated"] : [],
+      health: { score: healthScore },
+      durationMs: Date.now() - indexStartedAt,
+      userId: ownerId,
+    });
+
     return {
       repositoryId: repo.id,
       status: "ready",
@@ -536,6 +568,16 @@ async function indexRepository(projectId, ownerId, options = {}) {
       architecture,
     };
   } catch (err) {
+    if (obsHandle) {
+      intelligenceBridge.endIndex(obsHandle, {
+        repositoryId: repo?.id,
+        projectId,
+        jobId: job?.id,
+        error: err.message,
+        durationMs: Date.now() - indexStartedAt,
+        userId: ownerId,
+      });
+    }
     if (repo) {
       await prisma.repository.update({
         where: { id: repo.id },

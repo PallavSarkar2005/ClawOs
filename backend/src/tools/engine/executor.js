@@ -14,6 +14,7 @@ const {
   shouldSelfCorrect,
 } = require("./self-correct");
 const obs = require("./observability");
+const toolsBridge = require("../../observability/bridge/tools");
 
 const active = new Map(); // executionId → { abortController, toolId }
 
@@ -140,6 +141,20 @@ async function executeTool(nameOrId, rawArgs, ctx = {}) {
     inputs: args,
     validatedArgs: args,
   });
+  const obsHandle = toolsBridge.onToolStart(
+    {
+      id: executionId,
+      toolId: tool.id,
+      toolName: tool.name,
+      category: tool.category,
+      inputs: args,
+      validatedArgs: args,
+      userId: ctx.userId,
+      agentType: ctx.agentType,
+    },
+    ctx,
+  );
+  ctx.__obsHandle = obsHandle;
   await obs.recordLog(executionId, {
     toolId: tool.id,
     level: "info",
@@ -339,6 +354,27 @@ async function finalize(executionId, tool, ctx, result, startedAt, retries, cach
     retries,
     cached,
   });
+  toolsBridge.onToolFinish(
+    ctx.__obsHandle,
+    {
+      status: result?.ok ? "ok" : "error",
+      output: result,
+      error: result?.ok ? null : result?.error,
+      durationMs,
+      retries,
+      cached,
+      inputs: validatedArgs,
+      toolName: tool.name || tool.id,
+    },
+    {
+      toolExecutionId: executionId,
+      toolName: tool.name || tool.id,
+      category: tool.category,
+      agentType: ctx.agentType,
+      userId: ctx.userId,
+      arguments: validatedArgs,
+    },
+  );
   await obs.recordMetric(tool.id, "latency_ms", durationMs, "ms", {
     ok: Boolean(result?.ok),
     retries,

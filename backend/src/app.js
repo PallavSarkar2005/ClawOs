@@ -107,6 +107,7 @@ app.use("/api/tools", toolsRoutes);
 app.use("/api/context", require("./routes/context.routes"));
 app.use("/api/knowledge", require("./routes/knowledge.routes"));
 app.use("/api/projects/:projectId/intelligence", require("./routes/intelligence.routes"));
+app.use("/api/observability", require("./routes/observability.routes"));
 
 app.use((err, req, res, next) => {
   if (err && err.message === "CORS origin not allowed") {

@@ -10,6 +10,7 @@ const { getEnv } = require("./config/env");
 const terminalService = require("./services/terminal.service");
 const { initToolPlatform } = require("./tools");
 const { initWorkflowEngine } = require("./workflows");
+const { initObservability } = require("./observability");
 
 const { PORT } = getEnv();
 
@@ -19,6 +20,7 @@ startIndexingWorker();
 startMemoryScheduler();
 initKnowledgeEngine().catch((e) => console.warn("[knowledge] init:", e.message));
 initIntelligence();
+initObservability();
 
 initToolPlatform({ hotReload: true, loadMcp: true }).catch((e) => {
   console.warn("[tools] init warning:", e.message);

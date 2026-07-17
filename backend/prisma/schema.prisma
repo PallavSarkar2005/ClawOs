@@ -50,6 +50,11 @@ model User {
   searchHistory          SearchHistory[]
   knowledgeJobs          KnowledgeJob[]
   repositories           Repository[]
+  obsTraces              ObsTrace[]
+  obsAlerts              ObsAlert[]
+  obsReplays             ObsReplay[]
+  obsMetrics             ObsMetric[]
+  obsSnapshots           ObsExecutionSnapshot[]
 }
 
 model Conversation {
@@ -1681,4 +1686,363 @@ model RepoIndexJob {
 
   @@index([repositoryId, status])
   @@index([status, createdAt])
+}
+
+// ─── Phase 8: AI Observability Platform ───────────────────────────────────────
+
+model ObsTrace {
+  id                 String    @id @default(uuid())
+  traceId            String    @unique
+  name               String
+  kind               String    @default("execution")
+  status             String    @default("running")
+  userId             String?
+  user               User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  projectId          String?
+  conversationId     String?
+  workflowId         String?
+  workflowExecutionId String?
+  agentExecutionId   String?
+  rootSpanId         String?
+  startTime          DateTime  @default(now())
+  endTime            DateTime?
+  durationMs         Int?
+  error              String?
+  retries            Int       @default(0)
+  attributes         Json      @default("{}")
+  timeline           Json      @default("[]")
+  compressed         Boolean   @default(false)
+  redacted           Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  spans              ObsSpan[]
+  promptTraces       ObsPromptTrace[]
+  toolTraces         ObsToolTrace[]
+  agentTraces        ObsAgentTrace[]
+  workflowTraces     ObsWorkflowTrace[]
+  knowledgeTraces    ObsKnowledgeTrace[]
+  contextTraces      ObsContextTrace[]
+  repositoryTraces   ObsRepositoryTrace[]
+  metrics            ObsMetric[]
+  alerts             ObsAlert[]
+  replays            ObsReplay[]
+  snapshots          ObsExecutionSnapshot[]
+
+  @@index([userId, startTime])
+  @@index([projectId, startTime])
+  @@index([workflowId, startTime])
+  @@index([agentExecutionId])
+  @@index([status, startTime])
+  @@index([kind, startTime])
+  @@index([durationMs])
+}
+
+model ObsSpan {
+  id              String    @id @default(uuid())
+  spanId          String
+  traceId         String
+  trace           ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  parentSpanId    String?
+  name            String
+  kind            String    @default("internal")
+  status          String    @default("running")
+  startTime       DateTime  @default(now())
+  endTime         DateTime?
+  durationMs      Int?
+  error           String?
+  retries         Int       @default(0)
+  attributes      Json      @default("{}")
+  events          Json      @default("[]")
+  createdAt       DateTime  @default(now())
+
+  @@unique([traceId, spanId])
+  @@index([traceId, startTime])
+  @@index([parentSpanId])
+  @@index([kind, status])
+  @@index([name])
+}
+
+model ObsPromptTrace {
+  id                 String    @id @default(uuid())
+  traceId            String
+  trace              ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  spanId             String?
+  originalPrompt     String?
+  systemPrompt       String?
+  contextInjected    String?
+  repositoryContext  String?
+  retrievedMemories  Json      @default("[]")
+  retrievedDocuments Json      @default("[]")
+  retrievedCode      Json      @default("[]")
+  response           String?
+  model              String?
+  provider           String?
+  temperature        Float?
+  promptTokens       Int       @default(0)
+  completionTokens   Int       @default(0)
+  totalTokens        Int       @default(0)
+  estimatedCost      Float     @default(0)
+  latencyMs          Int?
+  streamingLatencyMs Int?
+  status             String    @default("ok")
+  error              String?
+  metadata           Json      @default("{}")
+  createdAt          DateTime  @default(now())
+
+  @@index([traceId, createdAt])
+  @@index([model, createdAt])
+  @@index([provider, createdAt])
+}
+
+model ObsToolTrace {
+  id                 String    @id @default(uuid())
+  traceId            String
+  trace              ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  spanId             String?
+  toolExecutionId    String?
+  toolName           String
+  category           String?
+  arguments          Json      @default("{}")
+  output             Json?
+  status             String    @default("running")
+  error              String?
+  durationMs         Int?
+  retries            Int       @default(0)
+  cached             Boolean   @default(false)
+  agentType          String?
+  createdAt          DateTime  @default(now())
+
+  @@index([traceId, createdAt])
+  @@index([toolName, createdAt])
+  @@index([status, createdAt])
+  @@index([toolExecutionId])
+}
+
+model ObsAgentTrace {
+  id                 String    @id @default(uuid())
+  traceId            String
+  trace              ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  spanId             String?
+  agentExecutionId   String?
+  agentStepId        String?
+  agentType          String
+  orderIndex         Int       @default(0)
+  reasoning          String?
+  delegation         Json?
+  status             String    @default("running")
+  error              String?
+  retries            Int       @default(0)
+  durationMs         Int?
+  promptTokens       Int       @default(0)
+  completionTokens   Int       @default(0)
+  inputSummary       String?
+  outputSummary      String?
+  createdAt          DateTime  @default(now())
+
+  @@index([traceId, orderIndex])
+  @@index([agentType, createdAt])
+  @@index([agentExecutionId])
+}
+
+model ObsWorkflowTrace {
+  id                   String    @id @default(uuid())
+  traceId              String
+  trace                ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  spanId               String?
+  workflowId           String?
+  workflowExecutionId  String?
+  dag                  Json      @default("{}")
+  currentNodeKeys      Json      @default("[]")
+  completedNodes       Json      @default("[]")
+  failedNodes          Json      @default("[]")
+  queuedNodes          Json      @default("[]")
+  executionTimeline    Json      @default("[]")
+  checkpoints          Json      @default("[]")
+  approvals            Json      @default("[]")
+  retries              Int       @default(0)
+  status               String    @default("running")
+  durationMs           Int?
+  error                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([traceId])
+  @@index([workflowId, createdAt])
+  @@index([workflowExecutionId])
+}
+
+model ObsKnowledgeTrace {
+  id                 String    @id @default(uuid())
+  traceId            String
+  trace              ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  spanId             String?
+  retrievalId        String?
+  query              String?
+  chunks             Json      @default("[]")
+  similarityScores   Json      @default("[]")
+  graphPath          Json      @default("[]")
+  citationRanking    Json      @default("[]")
+  contextContribution Json     @default("{}")
+  embeddingModel     String?
+  searchLatencyMs    Int?
+  mode               String?
+  topK               Int?
+  resultCount        Int       @default(0)
+  status             String    @default("ok")
+  error              String?
+  createdAt          DateTime  @default(now())
+
+  @@index([traceId, createdAt])
+  @@index([retrievalId])
+}
+
+model ObsContextTrace {
+  id                 String    @id @default(uuid())
+  traceId            String
+  trace              ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  spanId             String?
+  contextSessionId   String?
+  query              String?
+  sources            Json      @default("{}")
+  ranking            Json      @default("[]")
+  selected           Json      @default("[]")
+  dropped            Json      @default("[]")
+  tokenBudget        Int?
+  usedTokens         Int?
+  compressionRatio   Float?
+  durationMs         Int?
+  reasoningPath      Json      @default("[]")
+  status             String    @default("ok")
+  error              String?
+  createdAt          DateTime  @default(now())
+
+  @@index([traceId, createdAt])
+  @@index([contextSessionId])
+}
+
+model ObsRepositoryTrace {
+  id                 String    @id @default(uuid())
+  traceId            String
+  trace              ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  spanId             String?
+  repositoryId       String?
+  projectId          String?
+  jobId              String?
+  stage              String?
+  filesProcessed     Int       @default(0)
+  filesTotal         Int       @default(0)
+  symbolsIndexed     Int       @default(0)
+  dependencyUpdates  Int       @default(0)
+  architectureChanges Json     @default("[]")
+  health             Json      @default("{}")
+  durationMs         Int?
+  status             String    @default("running")
+  error              String?
+  createdAt          DateTime  @default(now())
+
+  @@index([traceId, createdAt])
+  @@index([repositoryId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([jobId])
+}
+
+model ObsMetric {
+  id          String    @id @default(uuid())
+  traceId     String?
+  trace       ObsTrace? @relation(fields: [traceId], references: [traceId], onDelete: SetNull)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name        String
+  value       Float
+  unit        String?
+  tags        Json      @default("{}")
+  windowStart DateTime?
+  windowEnd   DateTime?
+  aggregated  Boolean   @default(false)
+  recordedAt  DateTime  @default(now())
+
+  @@index([name, recordedAt])
+  @@index([userId, name, recordedAt])
+  @@index([traceId])
+  @@index([aggregated, recordedAt])
+}
+
+model ObsAlert {
+  id          String    @id @default(uuid())
+  traceId     String?
+  trace       ObsTrace? @relation(fields: [traceId], references: [traceId], onDelete: SetNull)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type        String
+  severity    String    @default("warning")
+  title       String
+  message     String
+  status      String    @default("open")
+  metadata    Json      @default("{}")
+  acknowledgedAt DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@index([type, createdAt])
+  @@index([severity, status])
+  @@index([traceId])
+}
+
+model ObsReplay {
+  id          String    @id @default(uuid())
+  traceId     String
+  trace       ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status      String    @default("ready")
+  snapshot    Json      @default("{}")
+  steps       Json      @default("[]")
+  result      Json?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([traceId])
+  @@index([userId, createdAt])
+}
+
+model ObsExecutionSnapshot {
+  id          String    @id @default(uuid())
+  traceId     String
+  trace       ObsTrace  @relation(fields: [traceId], references: [traceId], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  kind        String    @default("full")
+  prompt      Json?
+  context     Json?
+  knowledge   Json?
+  toolCalls   Json?
+  workflow    Json?
+  agents      Json?
+  repository  Json?
+  llm         Json?
+  timeline    Json?
+  compressed  Boolean   @default(false)
+  sizeBytes   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([traceId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model ObsAuditLog {
+  id          String    @id @default(uuid())
+  userId      String?
+  action      String
+  resource    String?
+  resourceId  String?
+  metadata    Json      @default("{}")
+  ip          String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }

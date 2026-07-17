@@ -20,6 +20,7 @@ const architectAgent = require("./agents/architect.agent");
 const coderAgent = require("./agents/coder.agent");
 const testerAgent = require("./agents/tester.agent");
 const reviewerAgent = require("./agents/reviewer.agent");
+const { attachCoordinator, beginExecution } = require("../observability/bridge/coordinator");
 
 const AGENTS = {
   [AGENT_TYPES.RESEARCH]: researchAgent,
@@ -112,6 +113,7 @@ class Coordinator extends EventEmitter {
       steps: new Map(),
     };
     active.set(execution.id, handle);
+    beginExecution(input, execution.id);
 
     const externalEmit = typeof input.onEvent === "function" ? input.onEvent : null;
 
@@ -504,3 +506,4 @@ class Coordinator extends EventEmitter {
 }
 
 module.exports = new Coordinator();
+attachCoordinator(module.exports);

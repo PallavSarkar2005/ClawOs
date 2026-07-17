@@ -15,6 +15,7 @@ import SettingsPage from "../pages/SettingsPage";
 import SkillsPage from "../pages/SkillsPage";
 import DocumentsPage from "../pages/DocumentsPage";
 import ProjectsPage from "../pages/ProjectsPage";
+import ObservabilityPage from "../pages/ObservabilityPage";
 
 import { ProtectedRoute, PublicRoute } from "./ProtectedRoute";
 
@@ -145,6 +146,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <SkillsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/observability"
+          element={
+            <ProtectedRoute>
+              <ObservabilityPage />
             </ProtectedRoute>
           }
         />

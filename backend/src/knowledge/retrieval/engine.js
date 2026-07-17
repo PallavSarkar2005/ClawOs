@@ -6,6 +6,7 @@ const scoringService = require("../../memory/services/scoring.service");
 const memoryRepository = require("../../memory/repositories/memory.repository");
 const { cosineSimilarity, keywordScore, contentHash } = require("../../memory/utils");
 const { distanceToSimilarity, indexForCount } = require("../vector/format");
+const { recordRetrieval } = require("../../observability/bridge/knowledge");
 
 function dedupeByContent(items, keyFn = (i) => i.content) {
   const seen = new Set();
@@ -337,7 +338,7 @@ class KnowledgeRetrievalEngine {
       });
     }
 
-    return {
+    const out = {
       query,
       count: selected.length,
       latencyMs,
@@ -350,6 +351,22 @@ class KnowledgeRetrievalEngine {
         similarity: s.semanticScore,
       })),
     };
+    try {
+      recordRetrieval(out, {
+        userId,
+        query,
+        projectId: opts.projectId,
+        executionId: opts.executionId || opts.agentExecutionId,
+        traceId: opts.traceId,
+        topK,
+        mode: "hybrid",
+        embeddingModel: cfg.model,
+        latencyMs,
+      });
+    } catch {
+      /* ignore */
+    }
+    return out;
   }
 }
 

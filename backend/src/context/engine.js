@@ -8,6 +8,7 @@ const cache = require("./cache");
 const { retrieveAll } = require("./sources");
 const persistence = require("./persistence");
 const { buildObservability, citationsFromItems } = require("./observability");
+const { recordContextBuild } = require("../observability/bridge/context");
 
 function slotForSource(source) {
   if (source === "conversation" || source === "conversation_summary") return "conversation";
@@ -272,7 +273,7 @@ class ContextEngine {
       if (session) observability.sessionId = session.id;
     }
 
-    return {
+    const result = {
       text,
       sections: packed.sections,
       usedTokens: packed.usedTokens,
@@ -289,6 +290,19 @@ class ContextEngine {
       agentType,
       durationMs,
     };
+    try {
+      recordContextBuild(result, {
+        userId,
+        query,
+        executionId: options.agentExecutionId,
+        projectId: options.projectId,
+        conversationId: options.conversationId,
+        traceId: options.traceId,
+      });
+    } catch {
+      /* never block context build */
+    }
+    return result;
   }
 
   /** Preview without side-effect heavy persistence (still can persist if asked). */
