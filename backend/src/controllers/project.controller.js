@@ -1,6 +1,7 @@
 const projectRepository = require("../repositories/project.repository");
 const workspaceService = require("../services/workspace.service");
 const fsWorkspace = require("../services/fs-workspace.service");
+const { notifyFileChange } = require("../intelligence");
 
 class ProjectController {
   async getProjects(req, res) {
@@ -165,6 +166,10 @@ class ProjectController {
         message: `${isFolder ? "Folder" : "File"} created: ${resolvedPath}`,
       });
 
+      if (!isFolder) {
+        notifyFileChange(projectId, req.user.id, resolvedPath, "create");
+      }
+
       res.status(201).json(file);
     } catch (error) {
       console.error(error);
@@ -209,6 +214,7 @@ class ProjectController {
           source: "system",
           message: `Saved ${file.path}`,
         });
+        notifyFileChange(existing.projectId, req.user.id, file.path, "update");
       }
 
       res.json(file);

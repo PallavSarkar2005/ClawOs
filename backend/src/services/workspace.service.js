@@ -410,6 +410,14 @@ async function runGenerationPipeline(project, userId) {
   } catch (e) {
     console.warn("workspace sync:", e.message);
   }
+  try {
+    const { indexRepository } = require("../intelligence");
+    indexRepository(project.id, userId, { incremental: false }).catch((e) =>
+      console.warn("intelligence index:", e.message),
+    );
+  } catch (e) {
+    console.warn("intelligence:", e.message);
+  }
   return populated;
 }
 

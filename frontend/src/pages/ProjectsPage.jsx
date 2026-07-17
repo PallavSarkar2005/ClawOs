@@ -15,6 +15,7 @@ const MonacoWorkspace = lazy(() => import("../components/workspace/MonacoWorkspa
 const BottomPanel = lazy(() => import("../components/workspace/BottomPanel"));
 const AiExecutionPanel = lazy(() => import("../components/workspace/AiExecutionPanel"));
 const LivePreview = lazy(() => import("../components/workspace/LivePreview"));
+const IntelligencePanel = lazy(() => import("../components/intelligence/IntelligencePanel"));
 
 const AUTOSAVE_MS = 1200;
 const LAYOUT_SAVE_MS = 800;
@@ -43,6 +44,7 @@ export default function ProjectsPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [rightTab, setRightTab] = useState("intelligence");
   const [mobileExplorer, setMobileExplorer] = useState(false);
   const [splitView, setSplitView] = useState(false);
   const [secondaryTabId, setSecondaryTabId] = useState(null);
@@ -156,6 +158,19 @@ export default function ProjectsPage() {
     });
     setActiveTabId(file.id);
   };
+
+  const openFileByPath = useCallback(
+    (path) => {
+      if (!path || !selectedProject?.files) return;
+      const normalized = String(path).replace(/\\/g, "/");
+      const file = selectedProject.files.find((f) => {
+        const p = String(f.path || "").replace(/\\/g, "/");
+        return p === normalized || p.endsWith("/" + normalized) || p.endsWith(normalized);
+      });
+      if (file) openFile(file);
+    },
+    [selectedProject],
+  );
 
   const selectProject = useCallback(
     async (projectId) => {
@@ -744,21 +759,64 @@ export default function ProjectsPage() {
                 <Separator className="ide-sep-h ide-hide-sm" />
                 <Panel
                   id="ai"
-                  defaultSize={360}
-                  minSize={280}
-                  maxSize={480}
+                  defaultSize={380}
+                  minSize={300}
+                  maxSize={520}
                   className="ide-hide-sm min-w-0"
                 >
-                  <Suspense fallback={null}>
-                    <AiExecutionPanel
-                      execution={selectedExecution}
-                      executions={executions}
-                      loading={creating || (loadingProject && !executions.length)}
-                      onCancel={handleCancelAi}
-                      onSelectExecution={setSelectedExecution}
-                      onCollapse={() => setRightOpen(false)}
-                    />
-                  </Suspense>
+                  <div className="h-full flex flex-col min-h-0 bg-[#0f1419]">
+                    <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[#2a3542] shrink-0">
+                      <button
+                        type="button"
+                        className={`text-[11px] px-2.5 py-1 rounded ${
+                          rightTab === "intelligence"
+                            ? "bg-[#3d9cf0]/20 text-[#d7e0ea]"
+                            : "text-[#8b9aab]"
+                        }`}
+                        onClick={() => setRightTab("intelligence")}
+                      >
+                        Intelligence
+                      </button>
+                      <button
+                        type="button"
+                        className={`text-[11px] px-2.5 py-1 rounded ${
+                          rightTab === "ai"
+                            ? "bg-[#3d9cf0]/20 text-[#d7e0ea]"
+                            : "text-[#8b9aab]"
+                        }`}
+                        onClick={() => setRightTab("ai")}
+                      >
+                        AI Runtime
+                      </button>
+                      <button
+                        type="button"
+                        className="ml-auto text-[#8b9aab] text-xs px-2"
+                        onClick={() => setRightOpen(false)}
+                        title="Collapse"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                      <Suspense fallback={null}>
+                        {rightTab === "intelligence" ? (
+                          <IntelligencePanel
+                            projectId={selectedProject?.id}
+                            onOpenFile={openFileByPath}
+                          />
+                        ) : (
+                          <AiExecutionPanel
+                            execution={selectedExecution}
+                            executions={executions}
+                            loading={creating || (loadingProject && !executions.length)}
+                            onCancel={handleCancelAi}
+                            onSelectExecution={setSelectedExecution}
+                            onCollapse={() => setRightOpen(false)}
+                          />
+                        )}
+                      </Suspense>
+                    </div>
+                  </div>
                 </Panel>
               </>
             )}

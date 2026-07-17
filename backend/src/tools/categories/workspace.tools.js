@@ -295,6 +295,72 @@ const workspaceTools = [
       }
     },
   }),
+  defineTool({
+    id: "workspace.intelligence",
+    name: "Repository Intelligence",
+    description:
+      "Index and query repository intelligence: architecture, symbols, references, impact, auth/JWT location, dead code, graphs",
+    category: "workspace",
+    version: "1.0.0",
+    permissions: ["workspace:read"],
+    timeout: 120000,
+    retries: 0,
+    cacheable: false,
+    schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["status", "index", "ask", "search", "impact", "architecture", "debt", "definition", "references"],
+        },
+        projectId: { type: "string" },
+        question: { type: "string" },
+        query: { type: "string" },
+        name: { type: "string" },
+        path: { type: "string" },
+        incremental: { type: "boolean" },
+      },
+      required: ["action"],
+    },
+    async executor(args, ctx) {
+      try {
+        const intelligence = require("../../intelligence");
+        const projectId = args.projectId || ctx.projectId;
+        if (!projectId) return fail("No projectId", "NO_PROJECT");
+        const userId = ctx.userId;
+        switch (args.action) {
+          case "status":
+            return ok(await intelligence.getStatus(projectId, userId));
+          case "index":
+            return ok(await intelligence.indexRepository(projectId, userId, { incremental: Boolean(args.incremental) }));
+          case "ask":
+            return ok(await intelligence.ask(projectId, userId, args.question || args.query || ""));
+          case "search": {
+            const repo = await intelligence.getRepository(projectId, userId);
+            return ok(await intelligence.navigation.workspaceSearch(repo.id, args.query || args.question || ""));
+          }
+          case "impact":
+            return ok(await intelligence.impact(projectId, userId, { path: args.path, symbol: args.name }));
+          case "architecture":
+            return ok(await intelligence.getGraphs(projectId, userId));
+          case "debt":
+            return ok(await intelligence.getDebt(projectId, userId));
+          case "definition": {
+            const repo = await intelligence.getRepository(projectId, userId);
+            return ok(await intelligence.navigation.goToDefinition(repo.id, { name: args.name, path: args.path }));
+          }
+          case "references": {
+            const repo = await intelligence.getRepository(projectId, userId);
+            return ok(await intelligence.navigation.findReferences(repo.id, { name: args.name }));
+          }
+          default:
+            return fail(`Unknown action ${args.action}`, "BAD_ACTION");
+        }
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  }),
 ];
 
 module.exports = { workspaceTools };

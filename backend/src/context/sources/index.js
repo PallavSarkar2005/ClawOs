@@ -181,7 +181,25 @@ async function retrieveRepository(userId, query, opts = {}) {
     fileLimit: opts.fileLimit || 80,
   });
   const gitItems = await analyzeGitHistory(opts.projectId, query);
-  return { items: [...items, ...gitItems], graph };
+
+  // Enrich with Phase 6 repository intelligence when indexed
+  let intelItems = [];
+  try {
+    const { buildCoordinatorContext } = require("../../intelligence");
+    const intel = await buildCoordinatorContext(opts.projectId, userId, query);
+    intelItems = intel.items || [];
+    if (intel.intelligence?.summary && !graph.intelligence) {
+      graph.intelligence = {
+        healthScore: intel.intelligence.healthScore,
+        summary: intel.intelligence.summary,
+        techInventory: intel.intelligence.techInventory,
+      };
+    }
+  } catch {
+    /* optional until first index */
+  }
+
+  return { items: [...intelItems, ...items, ...gitItems], graph };
 }
 
 async function retrieveExecutions(userId, query, opts = {}) {

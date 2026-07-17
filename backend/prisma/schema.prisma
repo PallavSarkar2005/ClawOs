@@ -47,6 +47,7 @@ model User {
   knowledgeCollections   KnowledgeCollection[]
   searchHistory          SearchHistory[]
   knowledgeJobs          KnowledgeJob[]
+  repositories           Repository[]
 }
 
 model Conversation {
@@ -414,6 +415,7 @@ model Project {
   terminals    TerminalSession[]
   runs         CodeRun[]
   editorTabs   EditorTab[]
+  repository   Repository?
 }
 
 model TerminalSession {
@@ -1130,4 +1132,277 @@ model KnowledgeJob {
   @@index([userId, status])
   @@index([status, createdAt])
   @@index([type, status])
+}
+
+/// Phase 6 — Workspace Intelligence / Repository Intelligence Platform
+model Repository {
+  id              String   @id @default(uuid())
+  projectId       String   @unique
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name            String
+  rootPath        String?
+  languageStats   Json     @default("{}")
+  techInventory   Json     @default("[]")
+  healthScore     Float    @default(100)
+  indexStatus     String   @default("idle")
+  indexProgress   Float    @default(0)
+  filesIndexed    Int      @default(0)
+  symbolsIndexed  Int      @default(0)
+  depsIndexed     Int      @default(0)
+  lastIndexedAt   DateTime?
+  indexError      String?
+  summary         String?
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  files                 RepositoryFile[]
+  symbols               Symbol[]
+  references            Reference[]
+  dependencies          Dependency[]
+  architectureSnapshots ArchitectureSnapshot[]
+  codeMetrics           CodeMetric[]
+  componentGraphs       ComponentGraph[]
+  apiGraphs             ApiGraph[]
+  callGraphs            CallGraph[]
+  importGraphs          ImportGraph[]
+  workspaceMemories     WorkspaceMemory[]
+  indexJobs             RepoIndexJob[]
+
+  @@index([ownerId])
+  @@index([indexStatus])
+}
+
+model RepositoryFile {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  projectFileId String?
+  path          String
+  name          String
+  extension     String?
+  language      String?
+  isFolder      Boolean  @default(false)
+  parentPath    String?
+  contentHash   String?
+  sizeBytes     Int      @default(0)
+  lineCount     Int      @default(0)
+  complexity    Float    @default(0)
+  exports       Json     @default("[]")
+  imports       Json     @default("[]")
+  metadata      Json     @default("{}")
+  indexedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  symbols       Symbol[]
+  references    Reference[] @relation("RefFile")
+
+  @@unique([repositoryId, path])
+  @@index([repositoryId, language])
+  @@index([repositoryId, isFolder])
+  @@index([contentHash])
+}
+
+model Symbol {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  fileId        String
+  file          RepositoryFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  name          String
+  kind          String
+  signature     String?
+  startLine     Int      @default(1)
+  endLine       Int      @default(1)
+  startCol      Int      @default(0)
+  endCol        Int      @default(0)
+  exported      Boolean  @default(false)
+  visibility    String   @default("public")
+  parentSymbol  String?
+  documentation String?
+  typeInfo      String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  referencesFrom Reference[] @relation("RefFrom")
+  referencesTo   Reference[] @relation("RefTo")
+
+  @@index([repositoryId, name])
+  @@index([repositoryId, kind])
+  @@index([fileId])
+  @@index([name, kind])
+}
+
+model Reference {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  fromSymbolId  String?
+  fromSymbol    Symbol?  @relation("RefFrom", fields: [fromSymbolId], references: [id], onDelete: Cascade)
+  toSymbolId    String?
+  toSymbol      Symbol?  @relation("RefTo", fields: [toSymbolId], references: [id], onDelete: Cascade)
+  fileId        String?
+  file          RepositoryFile? @relation("RefFile", fields: [fileId], references: [id], onDelete: Cascade)
+  kind          String
+  name          String?
+  line          Int      @default(1)
+  column        Int      @default(0)
+  context       String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([repositoryId, kind])
+  @@index([fromSymbolId])
+  @@index([toSymbolId])
+  @@index([fileId])
+  @@index([name])
+}
+
+model Dependency {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  fromPath      String
+  toPath        String
+  kind          String   @default("import")
+  specifier     String?
+  isExternal    Boolean  @default(false)
+  isCircular    Boolean  @default(false)
+  weight        Float    @default(1)
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@unique([repositoryId, fromPath, toPath, kind])
+  @@index([repositoryId, kind])
+  @@index([repositoryId, isCircular])
+  @@index([fromPath])
+  @@index([toPath])
+}
+
+model ArchitectureSnapshot {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  version       Int      @default(1)
+  summary       String?
+  layers        Json     @default("[]")
+  patterns      Json     @default("[]")
+  conventions   Json     @default("{}")
+  techStack     Json     @default("[]")
+  diagrams      Json     @default("{}")
+  violations    Json     @default("[]")
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([repositoryId, createdAt])
+}
+
+model CodeMetric {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  path          String?
+  symbolName    String?
+  metricType    String
+  value         Float
+  severity      String   @default("info")
+  message       String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([repositoryId, metricType])
+  @@index([repositoryId, severity])
+  @@index([path])
+}
+
+model ComponentGraph {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  nodes         Json     @default("[]")
+  edges         Json     @default("[]")
+  roots         Json     @default("[]")
+  metadata      Json     @default("{}")
+  computedAt    DateTime @default(now())
+
+  @@index([repositoryId])
+}
+
+model ApiGraph {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  routes        Json     @default("[]")
+  handlers      Json     @default("[]")
+  edges         Json     @default("[]")
+  metadata      Json     @default("{}")
+  computedAt    DateTime @default(now())
+
+  @@index([repositoryId])
+}
+
+model CallGraph {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  nodes         Json     @default("[]")
+  edges         Json     @default("[]")
+  metadata      Json     @default("{}")
+  computedAt    DateTime @default(now())
+
+  @@index([repositoryId])
+}
+
+model ImportGraph {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  nodes         Json     @default("[]")
+  edges         Json     @default("[]")
+  cycles        Json     @default("[]")
+  metadata      Json     @default("{}")
+  computedAt    DateTime @default(now())
+
+  @@index([repositoryId])
+}
+
+model WorkspaceMemory {
+  id            String   @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  kind          String
+  key           String
+  value         Json     @default("{}")
+  importance    Float    @default(0.5)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([repositoryId, kind, key])
+  @@index([repositoryId, kind])
+}
+
+model RepoIndexJob {
+  id            String    @id @default(uuid())
+  repositoryId  String
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  type          String    @default("full")
+  status        String    @default("queued")
+  progress      Float     @default(0)
+  stage         String?
+  filesTotal    Int       @default(0)
+  filesDone     Int       @default(0)
+  error         String?
+  payload       Json      @default("{}")
+  result        Json?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([repositoryId, status])
+  @@index([status, createdAt])
 }
