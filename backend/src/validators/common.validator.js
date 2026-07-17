@@ -40,10 +40,15 @@ const createSkillSchema = z.object({
 
 const createWorkflowSchema = z.object({
   name: z.string().min(1).max(120),
-  description: z.string().max(2000).optional().default(""),
-  prompt: z.string().min(1).max(50000).optional().default(""),
+  description: z.string().max(5000).optional().default(""),
+  prompt: z.string().max(100000).optional().default(""),
+  definition: z.any().optional(),
   enabled: z.boolean().optional(),
-});
+  status: z.string().max(40).optional(),
+  projectId: z.string().optional().nullable(),
+  tags: z.array(z.string().max(80)).max(50).optional(),
+  variables: z.record(z.string(), z.any()).optional(),
+}).passthrough();
 
 const createProjectSchema = z.object({
   name: z.string().min(1).max(120),

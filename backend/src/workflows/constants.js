@@ -1,0 +1,120 @@
+const EXECUTION_STATUS = {
+  QUEUED: "QUEUED",
+  RUNNING: "RUNNING",
+  PAUSED: "PAUSED",
+  WAITING: "WAITING",
+  AWAITING_APPROVAL: "AWAITING_APPROVAL",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+  CANCELLED: "CANCELLED",
+  TIMED_OUT: "TIMED_OUT",
+};
+
+const NODE_STATUS = {
+  PENDING: "PENDING",
+  QUEUED: "QUEUED",
+  RUNNING: "RUNNING",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+  SKIPPED: "SKIPPED",
+  CANCELLED: "CANCELLED",
+  WAITING: "WAITING",
+  RETRYING: "RETRYING",
+};
+
+const NODE_TYPES = {
+  START: "start",
+  END: "end",
+  CONDITION: "condition",
+  LOOP: "loop",
+  DELAY: "delay",
+  TIMER: "timer",
+  RETRY: "retry",
+  WAIT: "wait",
+  APPROVAL: "approval",
+  WEBHOOK: "webhook",
+  HTTP: "http",
+  COORDINATOR: "coordinator",
+  RESEARCH_AGENT: "research_agent",
+  ARCHITECT_AGENT: "architect_agent",
+  CODER_AGENT: "coder_agent",
+  REVIEWER_AGENT: "reviewer_agent",
+  TESTER_AGENT: "tester_agent",
+  LLM: "llm",
+  WORKSPACE_INTELLIGENCE: "workspace_intelligence",
+  KNOWLEDGE_RETRIEVAL: "knowledge_retrieval",
+  CONTEXT_RETRIEVAL: "context_retrieval",
+  TERMINAL: "terminal",
+  FILESYSTEM: "filesystem",
+  GIT: "git",
+  BROWSER: "browser",
+  MEMORY: "memory",
+  NOTIFICATION: "notification",
+  EMAIL: "email",
+  SLACK: "slack",
+  DISCORD: "discord",
+  GITHUB: "github",
+  CUSTOM_SCRIPT: "custom_script",
+  TOOL: "tool",
+  CODE: "code",
+};
+
+const TRIGGER_TYPES = {
+  MANUAL: "manual",
+  WEBHOOK: "webhook",
+  CRON: "cron",
+  SCHEDULE: "schedule",
+  REPOSITORY_CHANGE: "repository_change",
+  FILE_CHANGE: "file_change",
+  GIT_COMMIT: "git_commit",
+  PR_CREATED: "pr_created",
+  ISSUE_OPENED: "issue_opened",
+  DOCUMENT_UPLOADED: "document_uploaded",
+  API_CALL: "api_call",
+  AGENT_COMPLETION: "agent_completion",
+};
+
+const TERMINAL_EXECUTION = new Set([
+  EXECUTION_STATUS.COMPLETED,
+  EXECUTION_STATUS.FAILED,
+  EXECUTION_STATUS.CANCELLED,
+  EXECUTION_STATUS.TIMED_OUT,
+]);
+
+const STREAM_EVENTS = {
+  EXECUTION_QUEUED: "workflow.queued",
+  EXECUTION_STARTED: "workflow.started",
+  EXECUTION_PAUSED: "workflow.paused",
+  EXECUTION_RESUMED: "workflow.resumed",
+  EXECUTION_COMPLETED: "workflow.completed",
+  EXECUTION_FAILED: "workflow.failed",
+  EXECUTION_CANCELLED: "workflow.cancelled",
+  NODE_STARTED: "workflow.node.started",
+  NODE_COMPLETED: "workflow.node.completed",
+  NODE_FAILED: "workflow.node.failed",
+  NODE_SKIPPED: "workflow.node.skipped",
+  NODE_WAITING: "workflow.node.waiting",
+  LOG: "workflow.log",
+  CHECKPOINT: "workflow.checkpoint",
+  METRIC: "workflow.metric",
+  APPROVAL_REQUIRED: "workflow.approval_required",
+};
+
+const DEFAULT_SETTINGS = {
+  timeoutMs: 30 * 60 * 1000,
+  nodeTimeoutMs: 5 * 60 * 1000,
+  maxRetries: 2,
+  concurrency: 4,
+  rateLimitPerMinute: 60,
+  checkpointEveryNode: true,
+};
+
+module.exports = {
+  EXECUTION_STATUS,
+  NODE_STATUS,
+  NODE_TYPES,
+  TRIGGER_TYPES,
+  TERMINAL_EXECUTION,
+  STREAM_EVENTS,
+  DEFAULT_SETTINGS,
+};

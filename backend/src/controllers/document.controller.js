@@ -9,6 +9,23 @@ async function uploadDocument(req, res) {
       projectId: req.body.projectId,
       workspaceId: req.body.workspaceId,
     });
+    try {
+      const { fireByType } = require("../workflows/triggers/manager");
+      await fireByType(
+        req.user.id,
+        "document_uploaded",
+        { projectId: req.body.projectId },
+        {
+          inputs: {
+            documentId: result.document?.id,
+            name: result.document?.name,
+            projectId: req.body.projectId,
+          },
+        },
+      );
+    } catch {
+      /* optional */
+    }
     res.status(201).json(result.document);
   } catch (error) {
     console.error("Document Upload Error:", error);

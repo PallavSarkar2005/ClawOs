@@ -36,6 +36,17 @@ function notifyFileChange(projectId, ownerId, filePath, changeType = "update") {
       const repo = await ensureRepository(projectId, ownerId);
       if (filePath) await workspaceMemory.recordEdit(repo.id, filePath, { changeType });
       await reindexFile(projectId, ownerId, filePath);
+      try {
+        const { fireByType } = require("../workflows/triggers/manager");
+        await fireByType(ownerId, "file_change", { projectId, path: filePath }, {
+          inputs: { projectId, path: filePath, changeType },
+        });
+        await fireByType(ownerId, "repository_change", { projectId, repositoryId: repo.id }, {
+          inputs: { projectId, path: filePath, changeType },
+        });
+      } catch {
+        /* workflow triggers optional */
+      }
     } catch (err) {
       console.warn("[intelligence] incremental reindex:", err.message);
     }

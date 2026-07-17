@@ -9,6 +9,7 @@ const { initIntelligence } = require("./intelligence");
 const { getEnv } = require("./config/env");
 const terminalService = require("./services/terminal.service");
 const { initToolPlatform } = require("./tools");
+const { initWorkflowEngine } = require("./workflows");
 
 const { PORT } = getEnv();
 
@@ -22,6 +23,8 @@ initIntelligence();
 initToolPlatform({ hotReload: true, loadMcp: true }).catch((e) => {
   console.warn("[tools] init warning:", e.message);
 });
+
+initWorkflowEngine().catch((e) => console.warn("[workflows] init:", e.message));
 
 function shutdown(signal) {
   console.log(`[shutdown] ${signal} — cleaning up`);

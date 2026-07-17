@@ -30,6 +30,8 @@ model User {
   memories               Memory[]
   skills                 Skill[]
   workflows              Workflow[]
+  workflowTemplates      WorkflowTemplate[]
+  workflowExecutions     WorkflowExecution[]
   documents              Document[]
   settings               Setting?
   refreshTokens          RefreshToken[]
@@ -222,17 +224,291 @@ model Skill {
 }
 
 model Workflow {
+  id            String   @id @default(uuid())
+  name          String
+  description   String   @default("")
+  prompt        String   @default("")
+  definition    Json     @default("{\"nodes\":[],\"edges\":[],\"groups\":[],\"viewport\":{\"x\":0,\"y\":0,\"zoom\":1}}")
+  status        String   @default("draft")
+  version       Int      @default(1)
+  publishedAt   DateTime?
+  enabled       Boolean  @default(true)
+  projectId     String?
+  tags          String[] @default([])
+  variables     Json     @default("{}")
+  secrets       Json     @default("{}")
+  settings      Json     @default("{}")
+  permissions   Json     @default("{}")
+  isTemplate    Boolean  @default(false)
+  isShared      Boolean  @default(false)
+  shareToken    String?  @unique
+  clonedFromId  String?
+  metadata      Json     @default("{}")
+  lastRunAt     DateTime?
+  runCount      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  userId        String
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  versions      WorkflowVersion[]
+  nodes         WorkflowNode[]
+  edges         WorkflowEdge[]
+  executions    WorkflowExecution[]
+  triggers      WorkflowTrigger[]
+  schedules     WorkflowSchedule[]
+  metrics       WorkflowMetric[]
+
+  @@index([userId, status])
+  @@index([userId, enabled])
+  @@index([userId, createdAt])
+  @@index([projectId])
+  @@index([isTemplate])
+}
+
+model WorkflowVersion {
   id          String   @id @default(uuid())
-  name        String
-  description String
-  prompt      String
-
-  enabled     Boolean  @default(true)
-
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  version     Int
+  definition  Json
+  variables   Json     @default("{}")
+  changelog   String?
+  publishedBy String?
   createdAt   DateTime @default(now())
 
-  userId      String
-  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([workflowId, version])
+  @@index([workflowId, createdAt])
+}
+
+model WorkflowNode {
+  id          String   @id @default(uuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  nodeKey     String
+  type        String
+  label       String   @default("")
+  config      Json     @default("{}")
+  positionX   Float    @default(0)
+  positionY   Float    @default(0)
+  width       Float?
+  height      Float?
+  groupId     String?
+  retryPolicy Json     @default("{}")
+  timeoutMs   Int?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workflowId, nodeKey])
+  @@index([workflowId, type])
+}
+
+model WorkflowEdge {
+  id          String   @id @default(uuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  edgeKey     String
+  sourceKey   String
+  targetKey   String
+  sourceHandle String?
+  targetHandle String?
+  label       String?
+  condition   String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@unique([workflowId, edgeKey])
+  @@index([workflowId, sourceKey])
+  @@index([workflowId, targetKey])
+}
+
+model WorkflowExecution {
+  id              String    @id @default(uuid())
+  workflowId      String
+  workflow        Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version         Int       @default(1)
+  status          String    @default("QUEUED")
+  triggerType     String    @default("manual")
+  triggerData     Json      @default("{}")
+  definition      Json      @default("{}")
+  inputs          Json      @default("{}")
+  outputs         Json      @default("{}")
+  variables       Json      @default("{}")
+  context         Json      @default("{}")
+  currentNodeKeys String[]  @default([])
+  error           String?
+  errorNodeKey    String?
+  cancelRequested Boolean   @default(false)
+  pauseRequested   Boolean   @default(false)
+  approvalPending Json?
+  checkpoint      Json?
+  metrics         Json      @default("{}")
+  priority        Int       @default(0)
+  concurrencyKey  String?
+  parentExecutionId String?
+  projectId       String?
+  conversationId  String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  durationMs      Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  nodes           WorkflowExecutionNode[]
+  artifacts       WorkflowArtifact[]
+  checkpoints     WorkflowCheckpoint[]
+  metricsLog      WorkflowMetric[]
+
+  @@index([workflowId, status])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, priority])
+  @@index([parentExecutionId])
+}
+
+model WorkflowExecutionNode {
+  id            String   @id @default(uuid())
+  executionId   String
+  execution     WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  nodeKey       String
+  nodeType      String
+  label         String   @default("")
+  status        String   @default("PENDING")
+  attempt       Int      @default(0)
+  maxAttempts   Int      @default(1)
+  inputs        Json     @default("{}")
+  outputs       Json     @default("{}")
+  error         String?
+  logs          Json     @default("[]")
+  toolCalls     Json     @default("[]")
+  agentActivity Json     @default("{}")
+  tokensUsed    Int      @default(0)
+  latencyMs     Int?
+  memoryBytes   Int?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([executionId, nodeKey, attempt])
+  @@index([executionId, status])
+  @@index([executionId, nodeKey])
+}
+
+model WorkflowArtifact {
+  id          String   @id @default(uuid())
+  executionId String
+  execution   WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  nodeKey     String?
+  name        String
+  type        String   @default("json")
+  mimeType    String?
+  content     String?
+  data        Json?
+  sizeBytes   Int      @default(0)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([executionId, createdAt])
+  @@index([executionId, nodeKey])
+}
+
+model WorkflowCheckpoint {
+  id          String   @id @default(uuid())
+  executionId String
+  execution   WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  nodeKey     String?
+  state       Json
+  variables   Json     @default("{}")
+  completedKeys String[] @default([])
+  label       String?
+  createdAt   DateTime @default(now())
+
+  @@index([executionId, createdAt])
+}
+
+model WorkflowTrigger {
+  id          String   @id @default(uuid())
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  type        String
+  name        String   @default("")
+  enabled     Boolean  @default(true)
+  config      Json     @default("{}")
+  webhookSecret String?
+  lastFiredAt DateTime?
+  fireCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workflowId, type])
+  @@index([type, enabled])
+}
+
+model WorkflowTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @default("")
+  category    String   @default("general")
+  definition  Json
+  variables   Json     @default("{}")
+  tags        String[] @default([])
+  isBuiltin   Boolean  @default(false)
+  usageCount  Int      @default(0)
+  thumbnail   String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([category])
+  @@index([isBuiltin])
+  @@index([userId])
+}
+
+model WorkflowSchedule {
+  id              String    @id @default(uuid())
+  workflowId      String
+  workflow        Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  cron            String?
+  timezone        String    @default("UTC")
+  enabled         Boolean   @default(true)
+  oneShotAt       DateTime?
+  delayMs         Int?
+  inputs          Json      @default("{}")
+  nextRunAt       DateTime?
+  lastRunAt       DateTime?
+  lastStatus      String?
+  missedRecovery  Boolean   @default(true)
+  runCount        Int       @default(0)
+  maxRuns         Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([enabled, nextRunAt])
+  @@index([workflowId])
+}
+
+model WorkflowMetric {
+  id          String   @id @default(uuid())
+  workflowId  String?
+  workflow    Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+  executionId String?
+  execution   WorkflowExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  name        String
+  value       Float
+  unit        String?
+  tags        Json     @default("{}")
+  recordedAt  DateTime @default(now())
+
+  @@index([workflowId, name, recordedAt])
+  @@index([executionId, recordedAt])
 }
 
 model Document {
