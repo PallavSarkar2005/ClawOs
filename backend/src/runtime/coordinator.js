@@ -20,14 +20,26 @@ const architectAgent = require("./agents/architect.agent");
 const coderAgent = require("./agents/coder.agent");
 const testerAgent = require("./agents/tester.agent");
 const reviewerAgent = require("./agents/reviewer.agent");
+const { agents: autonomyAgents } = require("../autonomy/agents/registry");
 const { attachCoordinator, beginExecution } = require("../observability/bridge/coordinator");
 
 const AGENTS = {
   [AGENT_TYPES.RESEARCH]: researchAgent,
+  [AGENT_TYPES.RESEARCHER]: autonomyAgents.researcher || researchAgent,
   [AGENT_TYPES.ARCHITECT]: architectAgent,
   [AGENT_TYPES.CODER]: coderAgent,
+  [AGENT_TYPES.BACKEND]: autonomyAgents.backend_engineer || coderAgent,
+  [AGENT_TYPES.FRONTEND]: autonomyAgents.frontend_engineer || coderAgent,
+  [AGENT_TYPES.DATABASE]: autonomyAgents.database_engineer || architectAgent,
+  [AGENT_TYPES.DEVOPS]: autonomyAgents.devops_engineer || coderAgent,
+  [AGENT_TYPES.SECURITY]: autonomyAgents.security_engineer || reviewerAgent,
+  [AGENT_TYPES.QA]: autonomyAgents.qa_engineer || testerAgent,
   [AGENT_TYPES.TESTER]: testerAgent,
   [AGENT_TYPES.REVIEWER]: reviewerAgent,
+  [AGENT_TYPES.DOCUMENTATION]: autonomyAgents.documentation_writer || reviewerAgent,
+  [AGENT_TYPES.RELEASE]: autonomyAgents.release_manager || reviewerAgent,
+  [AGENT_TYPES.PROJECT_MANAGER]: autonomyAgents.project_manager || reviewerAgent,
+  [AGENT_TYPES.PLANNER]: autonomyAgents.planner || reviewerAgent,
 };
 
 /** In-memory active executions for cancel/resume */

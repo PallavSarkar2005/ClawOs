@@ -43,18 +43,29 @@ JSON schema:
 function sanitizePlan(plan, userMessage) {
   const validAgents = new Set([
     AGENT_TYPES.RESEARCH,
+    AGENT_TYPES.RESEARCHER,
     AGENT_TYPES.ARCHITECT,
     AGENT_TYPES.CODER,
+    AGENT_TYPES.BACKEND,
+    AGENT_TYPES.FRONTEND,
+    AGENT_TYPES.DATABASE,
+    AGENT_TYPES.DEVOPS,
+    AGENT_TYPES.SECURITY,
+    AGENT_TYPES.QA,
     AGENT_TYPES.TESTER,
     AGENT_TYPES.REVIEWER,
+    AGENT_TYPES.DOCUMENTATION,
+    AGENT_TYPES.RELEASE,
+    AGENT_TYPES.PROJECT_MANAGER,
+    AGENT_TYPES.PLANNER,
   ]);
 
   let tasks = Array.isArray(plan?.tasks) ? plan.tasks : [];
   tasks = tasks
-    .filter((t) => t && validAgents.has(String(t.agent || "").toLowerCase()))
+    .filter((t) => t && validAgents.has(String(t.agent || "").toLowerCase().replace(/-/g, "_")))
     .map((t, idx) => ({
       id: String(t.id || `t${idx + 1}`),
-      agent: String(t.agent).toLowerCase(),
+      agent: String(t.agent).toLowerCase().replace(/-/g, "_"),
       description: String(t.description || userMessage).slice(0, 2000),
       dependencies: Array.isArray(t.dependencies) ? t.dependencies.map(String) : [],
       priority: Number.isFinite(t.priority) ? t.priority : idx + 1,

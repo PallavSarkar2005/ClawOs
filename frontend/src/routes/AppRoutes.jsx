@@ -16,6 +16,7 @@ import SkillsPage from "../pages/SkillsPage";
 import DocumentsPage from "../pages/DocumentsPage";
 import ProjectsPage from "../pages/ProjectsPage";
 import ObservabilityPage from "../pages/ObservabilityPage";
+import AutonomyPage from "../pages/AutonomyPage";
 
 import { ProtectedRoute, PublicRoute } from "./ProtectedRoute";
 
@@ -155,6 +156,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <ObservabilityPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/autonomy"
+          element={
+            <ProtectedRoute>
+              <AutonomyPage />
             </ProtectedRoute>
           }
         />

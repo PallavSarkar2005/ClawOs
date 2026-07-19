@@ -55,6 +55,10 @@ model User {
   obsReplays             ObsReplay[]
   obsMetrics             ObsMetric[]
   obsSnapshots           ObsExecutionSnapshot[]
+  projectGoals           ProjectGoal[]
+  autonomousSessions     AutonomousSession[]
+  autonomyApprovals      AutonomyApproval[]
+  autonomyLearnings      AutonomyLearning[]
 }
 
 model Conversation {
@@ -2045,4 +2049,356 @@ model ObsAuditLog {
 
   @@index([userId, createdAt])
   @@index([action, createdAt])
+}
+
+/// Phase 9 — Autonomous Software Engineer
+model ProjectGoal {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId       String?
+  title           String
+  description     String
+  status          String   @default("active")
+  priority        Int      @default(50)
+  complexity      String   @default("medium")
+  estimatedHours  Float?
+  successCriteria Json     @default("[]")
+  metadata        Json     @default("{}")
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  plans           ExecutionPlan[]
+  sessions        AutonomousSession[]
+  decisions       Decision[]
+  artifacts       AutonomyArtifact[]
+
+  @@index([userId, status])
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model ExecutionPlan {
+  id              String   @id @default(uuid())
+  goalId          String
+  goal            ProjectGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  version         Int      @default(1)
+  status          String   @default("draft")
+  intent          String?
+  strategy        String?
+  milestones      Json     @default("[]")
+  executionGraph  Json     @default("{}")
+  estimatedDurationMs Int?
+  priorityScore   Float    @default(0)
+  replanReason    String?
+  parentPlanId    String?
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tasks           ExecutionTask[]
+  sessions        AutonomousSession[]
+  cycles          ImprovementCycle[]
+
+  @@index([goalId, version])
+  @@index([status])
+}
+
+model ExecutionTask {
+  id              String   @id @default(uuid())
+  planId          String
+  plan            ExecutionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  milestoneId     String?
+  externalId      String?
+  title           String
+  description     String
+  agentType       String
+  status          String   @default("pending")
+  priority        Int      @default(50)
+  complexity      String   @default("medium")
+  estimatedMs     Int?
+  actualMs        Int?
+  retryCount      Int      @default(0)
+  maxRetries      Int      @default(3)
+  input           Json     @default("{}")
+  output          String?
+  error           String?
+  qualityScore    Float?
+  checkpoint      Json?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  dependencies    TaskDependency[] @relation("TaskDeps")
+  dependents      TaskDependency[] @relation("TaskDependents")
+  assignments     AgentAssignment[]
+  decisions       Decision[]
+  artifacts       AutonomyArtifact[]
+  buildResults    BuildResult[]
+  testResults     TestResult[]
+  reviewResults   ReviewResult[]
+
+  @@index([planId, status])
+  @@index([agentType])
+  @@index([externalId])
+}
+
+model TaskDependency {
+  id           String @id @default(uuid())
+  taskId       String
+  task         ExecutionTask @relation("TaskDeps", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnId  String
+  dependsOn    ExecutionTask @relation("TaskDependents", fields: [dependsOnId], references: [id], onDelete: Cascade)
+  kind         String @default("hard")
+
+  @@unique([taskId, dependsOnId])
+  @@index([dependsOnId])
+}
+
+model AgentAssignment {
+  id          String   @id @default(uuid())
+  taskId      String
+  task        ExecutionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  agentType   String
+  role        String   @default("owner")
+  status      String   @default("assigned")
+  notes       String?
+  artifactIds Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([agentType, status])
+}
+
+model Decision {
+  id              String   @id @default(uuid())
+  goalId          String?
+  goal            ProjectGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  taskId          String?
+  task            ExecutionTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  sessionId       String?
+  session         AutonomousSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  userId          String?
+  kind            String
+  summary         String
+  reasoning       String
+  alternatives    Json     @default("[]")
+  confidence      Float    @default(0.5)
+  risks           Json     @default("[]")
+  tradeoffs       Json     @default("[]")
+  evidence        Json     @default("[]")
+  choice          String?
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([goalId, createdAt])
+  @@index([taskId])
+  @@index([sessionId])
+  @@index([kind])
+}
+
+model AutonomyArtifact {
+  id          String   @id @default(uuid())
+  goalId      String?
+  goal        ProjectGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  taskId      String?
+  task        ExecutionTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  sessionId   String?
+  session     AutonomousSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  kind        String
+  name        String
+  path        String?
+  mimeType    String?
+  content     String?
+  contentJson Json?
+  sizeBytes   Int?
+  checksum    String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([goalId, kind])
+  @@index([taskId])
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+model BuildResult {
+  id          String   @id @default(uuid())
+  taskId      String?
+  task        ExecutionTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  sessionId   String?
+  session     AutonomousSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  status      String
+  command     String?
+  exitCode    Int?
+  stdout      String?
+  stderr      String?
+  durationMs  Int?
+  errors      Json     @default("[]")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
+  @@index([sessionId])
+  @@index([status])
+}
+
+model TestResult {
+  id          String   @id @default(uuid())
+  taskId      String?
+  task        ExecutionTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  sessionId   String?
+  session     AutonomousSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  status      String
+  suite       String?
+  passed      Int      @default(0)
+  failed      Int      @default(0)
+  skipped     Int      @default(0)
+  coverage    Float?
+  report      String?
+  failures    Json     @default("[]")
+  durationMs  Int?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
+  @@index([sessionId])
+  @@index([status])
+}
+
+model ReviewResult {
+  id          String   @id @default(uuid())
+  taskId      String?
+  task        ExecutionTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  sessionId   String?
+  session     AutonomousSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  status      String
+  score       Float    @default(0)
+  architecture Float?
+  performance  Float?
+  security     Float?
+  readability  Float?
+  maintainability Float?
+  complexity   Float?
+  comments    Json     @default("[]")
+  fixes       Json     @default("[]")
+  criticalIssues Int   @default(0)
+  summary     String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
+  @@index([sessionId])
+  @@index([score])
+}
+
+model AutonomousSession {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId          String?
+  goal            ProjectGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  planId          String?
+  plan            ExecutionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  projectId       String?
+  conversationId  String?
+  agentExecutionId String?
+  status          String   @default("pending")
+  phase           String   @default("planning")
+  progress        Float    @default(0)
+  checkpoint      Json     @default("{}")
+  memory          Json     @default("{}")
+  sharedMemory    Json     @default("{}")
+  currentTaskId   String?
+  error           String?
+  cancelRequested Boolean  @default(false)
+  qualityGate     Json     @default("{}")
+  metrics         Json     @default("{}")
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  lastHeartbeatAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  artifacts       AutonomyArtifact[]
+  decisions       Decision[]
+  buildResults    BuildResult[]
+  testResults     TestResult[]
+  reviewResults   ReviewResult[]
+  cycles          ImprovementCycle[]
+  approvals       AutonomyApproval[]
+
+  @@index([userId, status])
+  @@index([goalId])
+  @@index([projectId])
+  @@index([status, updatedAt])
+}
+
+model ImprovementCycle {
+  id          String   @id @default(uuid())
+  sessionId   String
+  session     AutonomousSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  planId      String?
+  plan        ExecutionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  cycleNumber Int
+  phase       String
+  status      String   @default("running")
+  buildOk     Boolean  @default(false)
+  testsOk     Boolean  @default(false)
+  reviewOk    Boolean  @default(false)
+  qualityScore Float?
+  analysis    String?
+  fixes       Json     @default("[]")
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  durationMs  Int?
+  metadata    Json     @default("{}")
+
+  @@index([sessionId, cycleNumber])
+  @@index([status])
+}
+
+model AutonomyApproval {
+  id          String   @id @default(uuid())
+  sessionId   String?
+  session     AutonomousSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        String
+  action      String
+  description String
+  payload     Json     @default("{}")
+  risk        String   @default("high")
+  status      String   @default("pending")
+  decidedBy   String?
+  decisionNote String?
+  decidedAt   DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([sessionId])
+  @@index([kind, status])
+}
+
+model AutonomyLearning {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String?
+  kind        String
+  pattern     String
+  strategy    String
+  success     Boolean  @default(true)
+  confidence  Float    @default(0.5)
+  context     Json     @default("{}")
+  evidence    Json     @default("[]")
+  reuseCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, kind])
+  @@index([projectId])
+  @@index([success, confidence])
 }

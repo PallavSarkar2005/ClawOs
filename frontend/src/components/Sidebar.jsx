@@ -20,6 +20,7 @@ import {
   Search,
   Star,
   Activity,
+  Bot,
   Trash2,
   X
 } from "lucide-react";
@@ -35,6 +36,7 @@ const navItems = [
   { icon: FileText, label: "Documents", to: "/documents", color: "text-amber-400" },
   { icon: GitBranch, label: "Workflows", to: "/workflows", color: "text-purple-400" },
   { icon: Activity, label: "Observability", to: "/observability", color: "text-sky-400" },
+  { icon: Bot, label: "Autonomy", to: "/autonomy", color: "text-emerald-400" },
   { icon: Zap, label: "Skills Hub", to: "/skills", color: "text-cyan-400" },
 ];
 
