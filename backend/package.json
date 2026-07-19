@@ -6,7 +6,16 @@
   "scripts": {
     "prestart": "node scripts/ensure-env.js",
     "predev": "node scripts/ensure-env.js",
-    "test": "node --test src/memory/__tests__/memory-engine.test.js src/knowledge/__tests__/knowledge-engine.test.js src/__tests__/security.test.js src/__tests__/auth-cookies.test.js src/__tests__/safe-exec.test.js src/__tests__/validation.test.js src/__tests__/runtime/*.test.js src/__tests__/tools/*.test.js src/__tests__/context/*.test.js src/intelligence/__tests__/*.test.js src/workflows/__tests__/*.test.js src/observability/__tests__/*.test.js src/autonomy/__tests__/*.test.js",
+    "test": "npm run test:unit",
+    "test:unit": "node --test src/memory/__tests__/memory-engine.test.js src/knowledge/__tests__/knowledge-engine.test.js src/__tests__/security.test.js src/__tests__/auth-cookies.test.js src/__tests__/safe-exec.test.js src/__tests__/validation.test.js src/__tests__/runtime/*.test.js src/__tests__/tools/*.test.js src/__tests__/context/*.test.js src/intelligence/__tests__/*.test.js src/workflows/__tests__/*.test.js src/observability/__tests__/*.test.js src/autonomy/__tests__/*.test.js",
+    "test:preflight": "node scripts/preflight-tests.js",
+    "test:integration": "node --test --test-concurrency=1 --test-isolation=none --test-timeout=120000 tests/integration/*.test.js",
+    "test:e2e": "node --test --test-concurrency=1 --test-isolation=none --test-timeout=120000 tests/e2e/*.test.js",
+    "test:all": "npm run test:preflight && npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:coverage": "c8 --reporter=text --reporter=lcov --reporter=html --reports-dir=coverage --check-coverage --lines=40 --functions=30 --branches=40 --statements=40 npm run test:all",
+    "test:report": "node -e \"require('./tests/helpers/report').writeReports()\"",
+    "test:db:up": "node scripts/ensure-test-db.js",
+    "test:db:down": "docker compose -f docker-compose.test.yml down",
     "test:autonomy": "node --test src/autonomy/__tests__/*.test.js",
     "test:observability": "node --test src/observability/__tests__/*.test.js",
     "test:workflows": "node --test src/workflows/__tests__/*.test.js",
@@ -49,6 +58,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "c8": "^10.1.3",
     "nodemon": "^3.1.14"
   }
 }

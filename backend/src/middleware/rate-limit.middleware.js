@@ -7,15 +7,23 @@ function clientKey(req) {
   return `${userPart}:${ip}`;
 }
 
+function rateLimitDisabled() {
+  return (
+    process.env.RATE_LIMIT_DISABLED === "true" ||
+    process.env.NODE_ENV === "test"
+  );
+}
+
 function makeLimiter({ windowMs, max, message }) {
   return rateLimit({
     windowMs,
-    max,
+    max: rateLimitDisabled() ? 1_000_000 : max,
     standardHeaders: true,
     legacyHeaders: false,
     message: { message },
     keyGenerator: clientKey,
     validate: { xForwardedForHeader: false, default: false },
+    skip: () => rateLimitDisabled(),
   });
 }
 
